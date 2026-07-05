@@ -2539,7 +2539,8 @@ if (pathname.includes('/api/recipe/parse')) {
     }
   });
 
-  win.loadURL('app://localhost/');
+  const indexPath = path.join(process.cwd(), 'web/dist/web/browser/index.html');
+  win.loadFile(indexPath);
 }
 
 app.on('open-url', (event, url) => {
