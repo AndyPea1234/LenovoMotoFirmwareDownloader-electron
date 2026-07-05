@@ -6,7 +6,7 @@
   "main": "main.electron.js",
   "scripts": {
     "// --- Daily Development ---": "",
-    "start": "electron .",
+    "start": "bun run qdl:prepare && bun run ffmpeg:prepare && bun run usb:prepare && bun run prepare:all && electron .",
     "start:clean": "bun run dev:data:reset && bun run start",
     "start:reset": "rm -rf assets/data/ && rm -rf ~/Library/Application\\ Support/LenovoMotoFirmwareDownloader/ && bun run start",
     "scan:connected-preview": "bun run tooling/dev/scan-connected-preview.ts",
