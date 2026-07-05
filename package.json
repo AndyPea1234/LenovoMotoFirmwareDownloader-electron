@@ -6,7 +6,7 @@
   "main": "main.electron.js",
   "scripts": {
     "// --- Daily Development ---": "",
-    "start": "bun run tooling/dev/launch-dev.ts && NODE_OPTIONS=\"--import tsx\" electron .",
+    "start": "electron .",
     "start:clean": "bun run dev:data:reset && bun run start",
     "start:reset": "rm -rf assets/data/ && rm -rf ~/Library/Application\\ Support/LenovoMotoFirmwareDownloader/ && bun run start",
     "scan:connected-preview": "bun run tooling/dev/scan-connected-preview.ts",
