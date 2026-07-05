@@ -1,0 +1,176 @@
+@if (file(); as activeFile) {
+  <article
+    class="rounded-lg border p-3"
+    [class.border-dark-border-bright]="isDark()"
+    [class.bg-dark-surface]="isDark()"
+    [class.border-light-border]="!isDark()"
+    [class.bg-light-elevated]="!isDark()"
+  >
+    <p
+      class="text-sm font-bold uppercase tracking-wide"
+      [class.text-dark-text-bright]="isDark()"
+      [class.text-light-text-bright]="!isDark()"
+    >
+      {{ activeFile.fileName }}
+    </p>
+    <p class="mt-1 font-mono text-[10px]" [class.text-dark-text]="isDark()" [class.text-light-text]="!isDark()">
+      <span class="text-accent">size:</span> {{ formatBytes(activeFile.sizeBytes) }}
+      <span class="mx-1 opacity-30">|</span>
+      <span class="text-accent">published:</span> {{ activeFile.publishDate || 'Unknown' }}
+    </p>
+    <p
+      class="mt-0.5 flex flex-wrap gap-1 font-mono text-[10px] opacity-70"
+      [class.text-dark-text-dim]="isDark()"
+      [class.text-light-text-dim]="!isDark()"
+    >
+      @if (activeFile.romMatchIdentifier) {
+        <span class="whitespace-nowrap">match_id: {{ activeFile.romMatchIdentifier }}</span>
+        <span class="opacity-30">|</span>
+      }
+      <span class="whitespace-nowrap">modified: {{ formatTime(activeFile.modifiedAt) }}</span>
+    </p>
+    <p
+      class="mt-1 break-all font-mono text-[10px]"
+      [class.text-success]="hasRecipeMetadata() && isDark()"
+      [class.text-success]="hasRecipeMetadata() && !isDark()"
+      [class.text-warning]="!hasRecipeMetadata() && isDark()"
+      [class.text-warning]="!hasRecipeMetadata() && !isDark()"
+    >
+      recipe_meta:
+      @if (hasRecipeMetadata()) {
+        ✓ available
+        @if (activeFile.metadataSource) {
+          ({{ activeFile.metadataSource }})
+        }
+      } @else {
+        ⚠ not linked
+        @if (hasLookupRecipeCandidate()) {
+          (can fetch from lookup)
+        }
+      }
+    </p>
+
+    <div class="mt-3 flex flex-wrap gap-2">
+      @if (!hasRecipeMetadata()) {
+        @if (hasLookupRecipeCandidate()) {
+          <button
+            class="rounded border px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider transition-all duration-200"
+            [class.border-accent]="isDark()"
+            [class.text-accent]="isDark()"
+            [class.hover:bg-accent-subtle]="isDark()"
+            [class.border-accent]="!isDark()"
+            [class.text-accent]="!isDark()"
+            [class.hover:bg-accent-light]="!isDark()"
+            [disabled]="isExtracting() || isFetchingRecipe() || isFileActionInProgress()"
+            type="button"
+            (click)="onFetchRecipeFromLookup()"
+          >
+            {{ isFetchingRecipe() ? 'Linking...' : 'Use from lookup' }}
+          </button>
+        }
+        <button
+          class="rounded border px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider transition-all duration-200"
+          [class.border-accent]="isDark()"
+          [class.text-accent]="isDark()"
+          [class.hover:bg-accent-subtle]="isDark()"
+          [class.border-accent]="!isDark()"
+          [class.text-accent]="!isDark()"
+          [class.hover:bg-accent-light]="!isDark()"
+          [disabled]="isExtracting() || isFetchingRecipe() || isFileActionInProgress()"
+          type="button"
+          (click)="onFetchRecipeFromSelectedModel()"
+        >
+          {{ isFetchingRecipe() ? 'Fetching...' : 'Fetch recipe' }}
+        </button>
+      }
+
+      @if (!activeFile.hasExtractedDir) {
+        <button
+          class="rounded border px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider transition-all duration-200"
+          [class.border-accent]="isDark()"
+          [class.text-accent]="isDark()"
+          [class.hover:bg-accent-subtle]="isDark()"
+          [class.border-accent]="!isDark()"
+          [class.text-accent]="!isDark()"
+          [class.hover:bg-accent-light]="!isDark()"
+          [disabled]="isExtracting() || isFetchingRecipe() || isFileActionInProgress()"
+          type="button"
+          (click)="onExtract()"
+        >
+          {{ isExtracting() ? 'Extracting...' : 'Extract' }}
+        </button>
+      }
+
+      <button
+        class="rounded border px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors duration-200"
+        [class.border-accent]="isDark()"
+        [class.text-accent]="isDark()"
+        [class.hover:bg-accent/10]="isDark()"
+        [class.border-accent]="!isDark()"
+        [class.text-accent]="!isDark()"
+        [class.hover:bg-accent-subtle]="!isDark()"
+        [disabled]="isExtracting() || isFetchingRecipe() || isFileActionInProgress()"
+        type="button"
+        (click)="onRescueLite()"
+      >
+        ⚡ Rescue Lite
+      </button>
+      <button
+        class="rounded border px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors duration-200"
+        [class.border-accent]="isDark()"
+        [class.text-accent]="isDark()"
+        [class.hover:bg-accent/10]="isDark()"
+        [class.border-accent]="!isDark()"
+        [class.text-accent]="!isDark()"
+        [class.hover:bg-accent-subtle]="!isDark()"
+        [disabled]="isExtracting() || isFetchingRecipe() || isFileActionInProgress()"
+        type="button"
+        (click)="onRescueLiteDryRun()"
+      >
+        Dry Run
+      </button>
+    </div>
+
+    @if (activeFile.recipeUrl) {
+      <p class="mt-2 break-all font-mono text-[10px]" [class.text-dark-text-dim]="isDark()" [class.text-light-text-dim]="!isDark()">
+        {{ activeFile.recipeUrl }}
+      </p>
+    }
+
+    <p
+      class="mt-2 break-all font-mono text-[10px]"
+      [class.text-success]="activeFile.hasExtractedDir && isDark()"
+      [class.text-success]="activeFile.hasExtractedDir && !isDark()"
+      [class.text-dark-text-dim]="!activeFile.hasExtractedDir && isDark()"
+      [class.text-light-text-dim]="!activeFile.hasExtractedDir && !isDark()"
+    >
+      extracted:
+      @if (activeFile.hasExtractedDir && activeFile.extractedDir) {
+        ✓ {{ activeFile.relativeExtractedDir || activeFile.extractedDir }}
+      } @else {
+        (will extract on first run)
+      }
+    </p>
+
+    <p class="break-all font-mono text-[10px]" [class.text-dark-text-dim]="isDark()" [class.text-light-text-dim]="!isDark()">
+      path: {{ activeFile.relativePath || activeFile.fullPath }}
+    </p>
+
+    <div class="mt-3 flex justify-end">
+      <button
+        class="rounded border px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider transition-all duration-200"
+        [class.border-danger]="isDark()"
+        [class.text-danger]="isDark()"
+        [class.hover:bg-danger-light]="isDark()"
+        [class.border-danger]="!isDark()"
+        [class.text-danger]="!isDark()"
+        [class.hover:bg-danger-light]="!isDark()"
+        [disabled]="isExtracting() || isFetchingRecipe() || isFileActionInProgress()"
+        type="button"
+        (click)="onRemove()"
+      >
+        ✕ Remove
+      </button>
+    </div>
+  </article>
+}

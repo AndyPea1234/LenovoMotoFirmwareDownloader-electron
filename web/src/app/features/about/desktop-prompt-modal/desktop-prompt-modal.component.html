@@ -1,0 +1,128 @@
+@if (store.showDesktopPrompt()) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+    <div class="absolute inset-0 bg-black/60 transition-opacity" (click)="dismiss()"></div>
+
+    <div
+      class="relative w-full max-w-md overflow-hidden rounded-2xl border p-6 text-left align-middle shadow-xl"
+      [class.border-dark-border]="store.isDark()"
+      [class.bg-dark-surface]="store.isDark()"
+      [class.border-light-border]="!store.isDark()"
+      [class.bg-light-surface]="!store.isDark()"
+    >
+      <h3
+        class="text-xl font-bold leading-6"
+        [class.text-dark-text-bright]="store.isDark()"
+        [class.text-light-text-bright]="!store.isDark()"
+      >
+        @if (isWindowsPrompt()) {
+          Default App (Windows)
+        } @else {
+          Desktop Shortcut
+        }
+      </h3>
+
+      <div class="mt-4">
+        @if (isWindowsPrompt()) {
+          <p
+            class="text-sm"
+            [class.text-dark-text]="store.isDark()"
+            [class.text-light-text]="!store.isDark()"
+          >
+            Windows only allows one handler for <span class="font-mono">softwarefix://</span>.
+            Let LMFD register that protocol for this Windows user if you want Lenovo login callbacks
+            to return here.
+            <br />
+            <br />
+            You can switch it back from the About tab later.
+          </p>
+        } @else if (store.desktopPromptReason() === 'wrong_wmclass') {
+          <p
+            class="text-sm"
+            [class.text-dark-text]="store.isDark()"
+            [class.text-light-text]="!store.isDark()"
+          >
+            An existing desktop shortcut was found, but it has an incorrect window class setting.
+            This can cause the application to not group correctly in your dock and taskbar.
+            <br />
+            <br />
+            Would you like to fix it?
+          </p>
+        } @else {
+          <p
+            class="text-sm"
+            [class.text-dark-text]="store.isDark()"
+            [class.text-light-text]="!store.isDark()"
+          >
+            It looks like you don't have a desktop shortcut configured.
+            <br />
+            <br />
+            Would you like to create one so it appears correctly in your application launcher and
+            dock?
+          </p>
+        }
+      </div>
+
+      <div class="mt-8 flex items-center justify-between">
+        <label
+          class="flex cursor-pointer select-none items-center gap-2 text-sm"
+          [class.text-dark-text-dim]="store.isDark()"
+          [class.text-light-text-dim]="!store.isDark()"
+        >
+          <input
+            type="checkbox"
+            class="h-4 w-4 rounded border-2 accent-accent focus:ring-accent"
+            [class.border-dark-border]="store.isDark()"
+            [class.bg-dark-elevated]="store.isDark()"
+            [class.border-light-border]="!store.isDark()"
+            [class.bg-light-surface]="!store.isDark()"
+            [checked]="dontAskAgain()"
+            (change)="toggleDontAsk($event)"
+          />
+          Don't ask again
+        </label>
+
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            class="rounded-lg border px-4 py-2 text-sm font-medium transition-colors duration-200"
+            [class.border-dark-border]="store.isDark()"
+            [class.text-dark-text]="store.isDark()"
+            [class.hover:bg-dark-elevated]="store.isDark()"
+            [class.border-light-border]="!store.isDark()"
+            [class.text-light-text]="!store.isDark()"
+            [class.hover:bg-light-bg]="!store.isDark()"
+            (click)="dismiss()"
+            [disabled]="isProcessing()"
+          >
+            Not now
+          </button>
+
+          <button
+            type="button"
+            class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
+            (click)="runPrimaryAction()"
+            [disabled]="isProcessing()"
+          >
+            @if (isProcessing()) {
+              @if (isWindowsPrompt()) {
+                Switching...
+              } @else if (store.desktopPromptReason() === 'wrong_wmclass') {
+                Fixing...
+              } @else {
+                Creating...
+              }
+            } @else {
+              @if (isWindowsPrompt()) {
+                Switch to LMFD
+              } @else if (store.desktopPromptReason() === 'wrong_wmclass') {
+                ✓ Fix it
+              } @else {
+                ✓ Create
+              }
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

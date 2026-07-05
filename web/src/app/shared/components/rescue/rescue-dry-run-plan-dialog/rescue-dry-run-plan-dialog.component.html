@@ -1,0 +1,78 @@
+@if (plan(); as activePlan) {
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+    (click)="onBackdropClick()"
+  >
+    <div
+      class="relative w-full max-w-3xl rounded-2xl border p-5 shadow-xl"
+      [class.border-dark-border]="isDark()"
+      [class.bg-dark-surface]="isDark()"
+      [class.border-light-border]="!isDark()"
+      [class.bg-light-surface]="!isDark()"
+      (click)="onDialogClick($event)"
+    >
+      <h4
+        class="text-base font-semibold"
+        [class.text-dark-text-bright]="isDark()"
+        [class.text-light-text-bright]="!isDark()"
+      >
+        Rescue Lite Dry Run Plan
+      </h4>
+      <p class="mt-2 font-mono text-xs" [class.text-dark-text]="isDark()" [class.text-light-text]="!isDark()">
+        <span class="text-accent">rom:</span> {{ activePlan.romName }}
+        <span class="mx-1 opacity-30">|</span>
+        <span class="text-accent">source:</span> {{ activePlan.commandSource }}
+        <span class="mx-1 opacity-30">|</span>
+        <span class="text-accent">wipe:</span> {{ activePlan.dataReset === 'yes' ? 'YES' : 'NO' }}
+        <span class="mx-1 opacity-30">|</span>
+        <span class="text-accent">transport:</span> {{ flashTransportLabel(activePlan.flashTransport) }}
+        @if (activePlan.flashTransport === 'qdl') {
+          <span class="mx-1 opacity-30">|</span>
+          <span class="text-accent">storage:</span> {{ activePlan.qdlStorage.toUpperCase() }}
+          @if (activePlan.qdlSerial) {
+            <span class="mx-1 opacity-30">|</span>
+            <span class="text-accent">serial:</span> {{ activePlan.qdlSerial }}
+          }
+        }
+      </p>
+
+      @if (activePlan.localFilePath) {
+        <p
+          class="mt-1 break-all font-mono text-xs"
+          [class.text-dark-text-dim]="isDark()"
+          [class.text-light-text-dim]="!isDark()"
+        >
+          {{ activePlan.localFilePath }}
+        </p>
+      }
+
+      <div
+        class="mt-4 max-h-[55vh] overflow-auto rounded-lg border p-3 font-mono text-xs"
+        [class.border-dark-border]="isDark()"
+        [class.bg-dark-elevated]="isDark()"
+        [class.border-light-border]="!isDark()"
+        [class.bg-light-bg]="!isDark()"
+        [class.text-dark-text]="isDark()"
+        [class.text-light-text]="!isDark()"
+      >
+        @for (command of activePlan.commands; track $index) {
+          <p class="break-all">
+            <span class="mr-1 select-none text-success" aria-hidden="true">$</span>
+            <span class="select-text">{{ command }}</span>
+          </p>
+        }
+      </div>
+
+      <div class="mt-5 flex items-center justify-end gap-2">
+        <app-rescue-dialog-button
+          [label]="copyButtonLabel()"
+          [isDark]="isDark()"
+          variant="secondary"
+          [disabled]="!hasCommands()"
+          (clicked)="onCopyCommands()"
+        />
+        <app-rescue-dialog-button label="Close" variant="primary" (clicked)="onBackdropClick()" />
+      </div>
+    </div>
+  </div>
+}

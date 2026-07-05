@@ -1,0 +1,332 @@
+<section
+  class="rounded-xl border p-6 transition-all duration-200"
+  [class.border-dark-border]="store.isDark()"
+  [class.bg-dark-surface]="store.isDark()"
+  [class.border-light-border]="!store.isDark()"
+  [class.bg-light-surface]="!store.isDark()"
+  [class.shadow-sm]="!store.isDark()"
+>
+  <h2
+    class="text-2xl font-bold"
+    [class.text-dark-text-bright]="store.isDark()"
+    [class.text-light-text-bright]="!store.isDark()"
+  >
+    About
+  </h2>
+
+  <div
+    class="mt-6 space-y-3 text-sm"
+    [class.text-dark-text]="store.isDark()"
+    [class.text-light-text]="!store.isDark()"
+  >
+    <p class="flex items-center gap-3">
+      <span
+        class="inline-block w-20 text-xs font-semibold uppercase tracking-wide"
+        [class.text-dark-text-dim]="store.isDark()"
+        [class.text-light-text-dim]="!store.isDark()"
+      >Version</span>
+      <span class="text-accent font-medium">{{ store.appInfo()?.version || 'Unknown' }}</span>
+    </p>
+    <p class="flex items-center gap-3">
+      <span
+        class="inline-block w-20 text-xs font-semibold uppercase tracking-wide"
+        [class.text-dark-text-dim]="store.isDark()"
+        [class.text-light-text-dim]="!store.isDark()"
+      >Platform</span>
+      <span class="capitalize">{{ store.appInfo()?.platform || 'Unknown' }}</span>
+    </p>
+    @if (store.appInfo()?.channel) {
+      <p class="flex items-center gap-3">
+        <span
+          class="inline-block w-20 text-xs font-semibold uppercase tracking-wide"
+          [class.text-dark-text-dim]="store.isDark()"
+          [class.text-light-text-dim]="!store.isDark()"
+        >Channel</span>
+        <span class="capitalize">{{ store.appInfo()?.channel }}</span>
+      </p>
+    }
+    <p class="flex items-center gap-3">
+      <span
+        class="inline-block w-20 text-xs font-semibold uppercase tracking-wide"
+        [class.text-dark-text-dim]="store.isDark()"
+        [class.text-light-text-dim]="!store.isDark()"
+      >Made by</span>
+      <span class="font-semibold text-success">enigma550</span>
+    </p>
+  </div>
+
+  <div class="mt-8 flex flex-wrap gap-3">
+    <button
+      class="flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-medium transition-all"
+      [class.border-dark-border]="store.isDark()"
+      [class.bg-dark-elevated]="store.isDark()"
+      [class.text-dark-text]="store.isDark()"
+      [class.hover:border-dark-border-bright]="store.isDark()"
+      [class.border-light-border]="!store.isDark()"
+      [class.bg-light-surface]="!store.isDark()"
+      [class.text-light-text]="!store.isDark()"
+      [class.hover:border-light-border-bright]="!store.isDark()"
+      type="button"
+      (click)="openRepo()"
+    >
+      <svg
+        class="h-4 w-4"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"
+        ></path>
+      </svg>
+      Git Repository
+    </button>
+    <button
+      class="flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-medium transition-all"
+      [class.border-dark-border]="store.isDark()"
+      [class.bg-dark-elevated]="store.isDark()"
+      [class.text-dark-text]="store.isDark()"
+      [class.hover:border-dark-border-bright]="store.isDark()"
+      [class.border-light-border]="!store.isDark()"
+      [class.bg-light-surface]="!store.isDark()"
+      [class.text-light-text]="!store.isDark()"
+      [class.hover:border-light-border-bright]="!store.isDark()"
+      type="button"
+      (click)="checkUpdates()"
+    >
+      <svg
+        class="h-4 w-4"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <polyline points="23 4 23 10 17 10"></polyline>
+        <polyline points="1 20 1 14 7 14"></polyline>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+      </svg>
+      Check Updates
+    </button>
+  </div>
+
+  @if (isWindowsPlatform()) {
+    <div
+      class="mt-8 border-t pt-6"
+      [class.border-dark-border]="store.isDark()"
+      [class.border-light-border]="!store.isDark()"
+    >
+      <h3 class="flex items-center gap-2 text-sm font-semibold text-warning">
+        <span>⊞</span>
+        <span>Default App (Windows)</span>
+      </h3>
+      <p
+        class="mt-2 text-sm"
+        [class.text-dark-text-dim]="store.isDark()"
+        [class.text-light-text-dim]="!store.isDark()"
+      >
+        Windows allows only one handler for the <span class="font-mono">softwarefix://</span>
+        protocol. Use the buttons below to point the handler at LMFD or restore the previously
+        saved Lenovo Software Fix command.
+      </p>
+      <p
+        class="mt-2 text-sm"
+        [class.text-dark-text-dim]="store.isDark()"
+        [class.text-light-text-dim]="!store.isDark()"
+      >
+        LMFD changes this per-user on Windows, so you do not need to hunt through Default Apps.
+      </p>
+      <div class="mt-3 flex flex-wrap gap-3">
+        <button
+          class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
+          type="button"
+          (click)="switchSoftwareFixProtocolToLmfd()"
+        >
+          Switch `softwarefix://` to LMFD
+        </button>
+        <button
+          class="rounded-lg border px-4 py-2 text-sm font-medium transition-all"
+          [class.border-dark-border]="store.isDark()"
+          [class.bg-dark-elevated]="store.isDark()"
+          [class.text-dark-text]="store.isDark()"
+          [class.hover:border-dark-border-bright]="store.isDark()"
+          [class.border-light-border]="!store.isDark()"
+          [class.bg-light-surface]="!store.isDark()"
+          [class.text-light-text]="!store.isDark()"
+          [class.hover:border-light-border-bright]="!store.isDark()"
+          type="button"
+          (click)="restoreSoftwareFixProtocolHandler()"
+        >
+          Restore previous handler
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (isLinuxPlatform()) {
+    <div
+      class="mt-8 border-t pt-6"
+      [class.border-dark-border]="store.isDark()"
+      [class.border-light-border]="!store.isDark()"
+    >
+      <h3 class="flex items-center gap-2 text-sm font-semibold text-warning">
+        <span>🐧</span>
+        <span>Desktop Integration (Linux)</span>
+      </h3>
+      <p
+        class="mt-2 text-sm"
+        [class.text-dark-text-dim]="store.isDark()"
+        [class.text-light-text-dim]="!store.isDark()"
+      >
+        Application shortcut for the launcher and dock.
+      </p>
+
+      @if (desktopStatus() === 'checking') {
+        <p class="mt-3 text-sm opacity-70">Checking status...</p>
+      } @else if (desktopStatus() === 'ok') {
+        <p class="mt-3 flex items-center gap-2 text-sm font-medium text-success">
+          <span>✓</span>
+          Shortcut is correctly configured.
+        </p>
+      } @else if (desktopStatus() === 'creating') {
+        <p class="mt-3 text-sm opacity-70">Creating shortcut...</p>
+      } @else {
+        <p class="mt-3 flex items-center gap-2 text-sm font-medium text-warning">
+          <span>!</span>
+          Shortcut is not configured.
+        </p>
+        <button
+          class="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
+          type="button"
+          (click)="createIntegration()"
+        >
+          Create Shortcut
+        </button>
+      }
+    </div>
+  }
+
+  @if (showUpdateModal()) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        class="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+        (click)="showUpdateModal.set(false)"
+      ></div>
+
+      <div
+        class="relative w-full max-w-md rounded-2xl border p-6 shadow-2xl"
+        [class.border-dark-border]="store.isDark()"
+        [class.bg-dark-surface]="store.isDark()"
+        [class.border-light-border]="!store.isDark()"
+        [class.bg-light-surface]="!store.isDark()"
+      >
+        <div
+          class="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full"
+          [class.bg-accent/10]="store.isDark()"
+          [class.text-accent]="true"
+          [class.bg-accent-light]="!store.isDark()"
+        >
+          <svg
+            class="h-7 w-7"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+        </div>
+        <h2
+          class="text-center text-xl font-bold"
+          [class.text-dark-text-bright]="store.isDark()"
+          [class.text-light-text-bright]="!store.isDark()"
+        >
+          Update Available
+        </h2>
+        <p
+          class="mb-4 mt-4 text-center text-sm"
+          [class.text-dark-text]="store.isDark()"
+          [class.text-light-text]="!store.isDark()"
+        >
+          @if (isAutomatedUpdate()) {
+            A new version is ready to install:
+          } @else {
+            A new version is available:
+          }
+          <br />
+          <strong class="text-lg text-success">v{{ frameworkUpdateInfo()?.version }}</strong>
+        </p>
+        <div class="mt-6 flex flex-col gap-3">
+          <div class="grid grid-cols-2 gap-3">
+            <button
+              class="flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-all"
+              [class.border-dark-border]="store.isDark()"
+              [class.bg-dark-elevated]="store.isDark()"
+              [class.text-dark-text]="store.isDark()"
+              [class.hover:border-accent]="store.isDark()"
+              [class.border-light-border]="!store.isDark()"
+              [class.bg-light-surface]="!store.isDark()"
+              [class.text-light-text]="!store.isDark()"
+              [class.hover:border-accent]="!store.isDark()"
+              type="button"
+              (click)="openReleasePage()"
+            >
+              <svg
+                class="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"
+                ></path>
+              </svg>
+              Releases
+            </button>
+            <button
+              class="flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
+              type="button"
+              [disabled]="downloadingUpdate()"
+              (click)="downloadAndApplyUpdate()"
+            >
+              @if (downloadingUpdate()) {
+                <svg
+                  class="h-4 w-4 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  ></circle>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z"
+                  ></path>
+                </svg>
+                Downloading...
+              } @else if (isAutomatedUpdate()) {
+                Download & Apply
+              } @else {
+                Open Download Page
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+</section>

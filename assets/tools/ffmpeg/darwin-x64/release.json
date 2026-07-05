@@ -1,0 +1,8 @@
+{
+  "source": "ffmpeg-static",
+  "platform": "darwin",
+  "arch": "x64",
+  "binaryName": "ffmpeg",
+  "copiedFrom": "/Users/pea/Desktop/LenovoMotoFirmwareDownloader-electron/node_modules/ffmpeg-static/ffmpeg",
+  "copiedAt": "2026-07-05T15:49:22.124Z"
+}

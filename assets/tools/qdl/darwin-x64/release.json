@@ -1,0 +1,8 @@
+{
+  "source": "linux-msm/qdl",
+  "requestedRelease": "latest",
+  "release": "v2.7",
+  "asset": "qdl-binary-macos-intel.zip",
+  "downloadedAt": "2026-07-05T15:49:22.023Z",
+  "downloadUrl": "https://github.com/linux-msm/qdl/releases/download/v2.7/qdl-binary-macos-intel.zip"
+}

@@ -1,0 +1,87 @@
+@if (store.firmwareVariants().length > 0) {
+  <section
+    class="rounded-xl border p-5"
+    [class.border-dark-border-bright]="store.isDark()"
+    [class.bg-dark-surface]="store.isDark()"
+    [class.border-light-border]="!store.isDark()"
+    [class.bg-light-elevated]="!store.isDark()"
+    [class.shadow-md]="!store.isDark()"
+  >
+    <h3
+      class="text-lg font-bold uppercase tracking-wide"
+      [class.text-dark-text-bright]="store.isDark()"
+      [class.text-light-text-bright]="!store.isDark()"
+    >
+      Firmware Variants
+      <span
+        class="ml-2 font-mono text-sm font-normal opacity-70"
+      >({{ store.firmwareVariants().length }})</span>
+    </h3>
+
+    @if (activeVariantDownloads().length > 0) {
+      <div class="mt-4 grid gap-3">
+        @for (download of activeVariantDownloads(); track download.downloadId) {
+          <app-firmware-active-download-card [download]="download" [isDark]="store.isDark()" />
+        }
+      </div>
+    }
+
+    <app-rescue-flash-console
+      [title]="'Rescue Console'"
+      [context]="'firmware'"
+      [isDark]="store.isDark()"
+      [download]="store.firmwareDownload()"
+      [statusText]="store.status()"
+      (cancelRequested)="store.cancelDownloadById($event)"
+    />
+
+    <div class="mt-4 grid gap-3">
+      @for (
+        variant of store.firmwareVariants();
+        track variant.romUrl + (variant.selectedParameters?.['country'] || '')
+      ) {
+        <app-firmware-variant-card
+          [variant]="variant"
+          [isDark]="store.isDark()"
+          (rescueRequested)="startRescueLite($event)"
+          (rescueDryRunRequested)="startRescueLiteDryRun($event)"
+        />
+      }
+    </div>
+  </section>
+}
+
+<app-rescue-options-dialog
+  [isOpen]="rescueDialogOpen"
+  [isDark]="store.isDark()"
+  [title]="rescueDialogTitle()"
+  [description]="rescueDialogDescription()"
+  [targetLabel]="rescueDialogVariant?.romName || ''"
+  [dryRun]="rescueDialogDryRun"
+  [dataReset]="rescueDialogDataReset"
+  [flashTransport]="rescueDialogFlashTransport"
+  [qdlStorage]="rescueDialogQdlStorage"
+  [qdlSerial]="rescueDialogQdlSerial"
+  [qdloaderDriverInstallBusy]="installingWindowsQdloaderDriver"
+  [qdloaderDriverInstalled]="windowsQdloaderDriverInstalled"
+  [spdDriverInstallBusy]="installingWindowsSpdDriver"
+  [spdDriverInstalled]="windowsSpdDriverInstalled"
+  [mtkDriverInstallBusy]="installingWindowsMtkDriver"
+  [mtkDriverInstalled]="windowsMtkDriverInstalled"
+  [showWindowsDriverInstall]="store.appInfo()?.platform === 'win32'"
+  (close)="closeRescueDialog()"
+  (confirm)="confirmRescueDialog()"
+  (installWindowsQdloaderDriver)="installWindowsQdloaderDriver()"
+  (installWindowsSpdDriver)="installWindowsSpdDriver()"
+  (installWindowsMtkDriver)="installWindowsMtkDriver()"
+  (dataResetChange)="setRescueDialogDataReset($event)"
+  (flashTransportChange)="setRescueDialogFlashTransport($event)"
+  (qdlStorageChange)="setRescueDialogQdlStorage($event)"
+  (qdlSerialChange)="setRescueDialogQdlSerial($event)"
+/>
+
+<app-rescue-dry-run-plan-dialog
+  [isDark]="store.isDark()"
+  [plan]="store.rescueDryRunPlanDialog()"
+  (close)="closeDryRunPlanDialog()"
+/>

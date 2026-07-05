@@ -1,0 +1,150 @@
+@if (entry(); as activeEntry) {
+  <article
+    class="rounded-lg border p-3"
+    [class.border-dark-border-bright]="isDark()"
+    [class.bg-dark-surface]="isDark()"
+    [class.border-light-border]="!isDark()"
+    [class.bg-light-elevated]="!isDark()"
+  >
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <p
+        class="text-sm font-bold uppercase tracking-wide"
+        [class.text-dark-text-bright]="isDark()"
+        [class.text-light-text-bright]="!isDark()"
+      >
+        {{ activeEntry.romName }}
+      </p>
+      <div class="flex items-center gap-2">
+        <span
+          class="rounded border px-2 py-1 font-mono text-[10px] uppercase tracking-wider"
+          [class.border-accent]="isDark()"
+          [class.text-accent]="isDark()"
+          [class.border-accent]="!isDark()"
+          [class.text-accent]="!isDark()"
+        >
+          {{ actionLabel(activeEntry) }}
+        </span>
+        <span
+          class="rounded border px-2 py-1 font-mono text-[10px] uppercase tracking-wider"
+          [class.border-dark-border-bright]="isDark()"
+          [class.text-dark-text]="isDark()"
+          [class.border-light-border-bright]="!isDark()"
+          [class.text-light-text]="!isDark()"
+        >
+          {{ activeEntry.status }}
+        </span>
+        @if (isRescueLite(activeEntry) && isRecipeGuided(activeEntry)) {
+          <span
+            class="rounded border px-2 py-1 font-mono text-[10px] uppercase tracking-wider"
+            [class.border-success]="isDark()"
+            [class.text-success]="isDark()"
+            [class.border-success]="!isDark()"
+            [class.text-success]="!isDark()"
+          >
+            Recipe
+          </span>
+        }
+
+        @if (isInProgress()) {
+          @if (activeEntry.status === 'downloading') {
+            <app-ui-action-button
+              label="Pause"
+              variant="warning"
+              appearance="solid"
+              [isDark]="isDark()"
+              [disabled]="isCanceling()"
+              (clicked)="onPause()"
+            />
+          } @else if (activeEntry.status === 'paused') {
+            <app-ui-action-button
+              label="Resume"
+              variant="success"
+              appearance="solid"
+              [isDark]="isDark()"
+              [disabled]="isCanceling()"
+              (clicked)="onResume()"
+            />
+          }
+
+          <app-ui-action-button
+            [label]="cancelButtonLabel()"
+            variant="danger"
+            appearance="solid"
+            [isDark]="isDark()"
+            [disabled]="isCanceling()"
+            (clicked)="onCancel()"
+          />
+        }
+
+        <app-ui-action-button
+          label="Clear"
+          variant="neutral"
+          appearance="outline"
+          [isDark]="isDark()"
+          (clicked)="onClear()"
+        />
+      </div>
+    </div>
+
+    <p class="mt-1 font-mono text-[10px]" [class.text-dark-text-dim]="isDark()" [class.text-light-text-dim]="!isDark()">
+      @if (activeEntry.totalBytes) {
+        <span class="text-accent">size:</span> {{ formatBytes(activeEntry.totalBytes) }}
+        <span class="mx-1 opacity-30">|</span>
+      }
+      <span class="text-accent">published:</span> {{ activeEntry.publishDate || 'Unknown' }}
+      <span class="mx-1 opacity-30">|</span>
+      <span class="text-accent">started:</span> {{ formatTime(activeEntry.startedAt) }}
+    </p>
+
+    @if (showsByteProgress()) {
+      <app-progress-bar class="mt-3" [percent]="downloadPercent() || 0" [isDark]="isDark()" />
+    }
+
+    @if (showsByteProgress()) {
+      <p class="mt-1 font-mono text-[10px]" [class.text-dark-text]="isDark()" [class.text-light-text]="!isDark()">
+        {{ formatBytes(activeEntry.downloadedBytes) }}
+        @if (activeEntry.totalBytes) {
+          / {{ formatBytes(activeEntry.totalBytes) }}
+        }
+        @if (activeEntry.status === 'downloading') {
+          <span class="mx-1 opacity-30">|</span>
+          <span class="text-success">{{ formatBytes(activeEntry.speedBytesPerSecond) }}/s</span>
+        }
+      </p>
+    }
+
+    @if (activeEntry.savePath) {
+      <p
+        class="mt-1 break-all font-mono text-[10px] opacity-70"
+        [class.text-dark-text-dim]="isDark()"
+        [class.text-light-text-dim]="!isDark()"
+      >
+        <span class="text-success">▸</span>
+        {{ activeEntry.savePath }}
+      </p>
+    }
+
+    @if (isRescueLite(activeEntry)) {
+      <p class="mt-1 font-mono text-[10px]" [class.text-dark-text-dim]="isDark()" [class.text-light-text-dim]="!isDark()">
+        <span class="text-accent">exec:</span> {{ rescueExecutionLabel() }}
+        <span class="mx-1 opacity-30">|</span>
+        <span class="text-accent">wipe:</span> {{ dataResetLabel(activeEntry.dataReset) }}
+        <span class="mx-1 opacity-30">|</span>
+        <span class="text-accent">transport:</span> {{ flashTransportLabel(activeEntry.flashTransport) }}
+      </p>
+      @if (rescueStepText(activeEntry)) {
+        <p
+          class="mt-1 break-all font-mono text-[10px]"
+          [class.text-dark-text-dim]="isDark()"
+          [class.text-light-text-dim]="!isDark()"
+        >
+          {{ rescueStepText(activeEntry) }}
+        </p>
+      }
+    }
+
+    @if (activeEntry.error) {
+      <p class="mt-1 break-all font-mono text-[10px] text-danger">⚠ {{ activeEntry.error }}</p>
+    }
+  </article>
+}

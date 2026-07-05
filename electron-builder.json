@@ -1,0 +1,40 @@
+{
+  "appId": "com.andy.lenovo-moto-firmware-downloader",
+  "productName": "Lenovo Moto Firmware Downloader",
+  "directories": {
+    "output": "dist-electron"
+  },
+  "files": [
+    "main.electron.js",
+    "core/**/*",
+    "web/dist/**/*",
+    "assets/**/*",
+    "!assets/tools/ffmpeg/**/*",
+    "!assets/tools/qdl/**/*",
+    "!assets/data/**/*",
+    "!downloads/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "assets/",
+      "to": "assets/",
+      "filter": ["**/*", "!tools/ffmpeg/**/*", "!tools/qdl/**/*"]
+    }
+  ],
+  "mac": {
+    "category": "public.app-category.developer-tools",
+    "target": ["dmg", "zip"],
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "entitlements": "entitlements.mac.plist",
+    "entitlementsInherit": "entitlements.mac.plist"
+  },
+  "win": {
+    "target": ["nsis", "portable"]
+  },
+  "linux": {
+    "target": ["AppImage", "deb"]
+  },
+  "npmRebuild": false,
+  "buildDependenciesFromSource": false
+}

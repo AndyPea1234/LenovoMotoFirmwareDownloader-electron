@@ -1,0 +1,117 @@
+@if (download(); as activeDownload) {
+  <article
+    class="rounded-xl border p-4 transition-all"
+    [class.border-dark-border]="isDark()"
+    [class.bg-dark-surface]="isDark()"
+    [class.border-light-border]="!isDark()"
+    [class.bg-light-surface]="!isDark()"
+  >
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <span
+          class="rounded-lg border px-2 py-1 font-mono text-[10px] uppercase tracking-wider"
+          [class.border-accent]="isDark()"
+          [class.text-accent]="isDark()"
+          [class.border-accent]="!isDark()"
+          [class.text-accent]="!isDark()"
+        >
+          {{ actionLabel(activeDownload) }}
+        </span>
+        <span
+          class="rounded-lg border px-2 py-1 font-mono text-[10px] uppercase tracking-wider"
+          [class.border-dark-border-bright]="isDark()"
+          [class.text-dark-text]="isDark()"
+          [class.border-light-border-bright]="!isDark()"
+          [class.text-light-text]="!isDark()"
+        >
+          {{ activeDownload.status }}
+        </span>
+        @if (isRescueLite(activeDownload) && isRecipeGuided(activeDownload)) {
+          <span
+            class="rounded-lg border px-2 py-1 font-mono text-[10px] uppercase tracking-wider"
+            [class.border-success]="isDark()"
+            [class.text-success]="isDark()"
+            [class.border-success]="!isDark()"
+            [class.text-success]="!isDark()"
+          >
+            Recipe-guided
+          </span>
+        }
+      </div>
+      <div class="flex items-center gap-2">
+        @if (activeDownload.status === 'downloading') {
+          <app-ui-action-button
+            label="Pause"
+            variant="warning"
+            appearance="solid"
+            [isDark]="isDark()"
+            [disabled]="isCanceling()"
+            (clicked)="onPause()"
+          />
+        } @else if (activeDownload.status === 'paused') {
+          <app-ui-action-button
+            label="Resume"
+            variant="success"
+            appearance="solid"
+            [isDark]="isDark()"
+            [disabled]="isCanceling()"
+            (clicked)="onResume()"
+          />
+        }
+
+        <app-ui-action-button
+          [label]="cancelButtonLabel()"
+          variant="danger"
+          appearance="solid"
+          [isDark]="isDark()"
+          [disabled]="isCanceling()"
+          (clicked)="onCancel()"
+        />
+        <app-ui-action-button
+          label="Clear"
+          variant="neutral"
+          appearance="outline"
+          [isDark]="isDark()"
+          (clicked)="onClear()"
+        />
+      </div>
+    </div>
+
+    <p class="mt-2 font-mono text-xs" [class.text-dark-text]="isDark()" [class.text-light-text]="!isDark()">
+      {{ activeDownload.romName }}
+    </p>
+    @if (isRescueLite(activeDownload)) {
+      <p class="mt-1 font-mono text-[10px]" [class.text-dark-text-dim]="isDark()" [class.text-light-text-dim]="!isDark()">
+        <span class="text-accent">exec:</span> {{ rescueExecutionLabel() }}
+        <span class="mx-1 opacity-30">|</span>
+        <span class="text-accent">wipe:</span> {{ dataResetLabel(activeDownload.dataReset) }}
+        <span class="mx-1 opacity-30">|</span>
+        <span class="text-accent">transport:</span> {{ flashTransportLabel(activeDownload.flashTransport) }}
+      </p>
+      @if (rescueStepText(activeDownload)) {
+        <p
+          class="mt-1 break-all font-mono text-[10px]"
+          [class.text-dark-text-dim]="isDark()"
+          [class.text-light-text-dim]="!isDark()"
+        >
+          {{ rescueStepText(activeDownload) }}
+        </p>
+      }
+    }
+
+    @if (showsByteProgress()) {
+      <app-progress-bar class="mt-3" [percent]="downloadPercent() || 0" [isDark]="isDark()" />
+    }
+
+    @if (activeDownload.savePath) {
+      <p
+        class="mt-1 break-all font-mono text-[10px]"
+        [class.text-dark-text-dim]="isDark()"
+        [class.text-light-text-dim]="!isDark()"
+      >
+        <span class="text-success">▸</span>
+        {{ activeDownload.savePath }}
+      </p>
+    }
+  </article>
+}

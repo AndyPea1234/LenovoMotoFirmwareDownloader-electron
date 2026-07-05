@@ -1,0 +1,52 @@
+@if (shouldShow()) {
+  <section
+    #consoleSection
+    class="mt-4 rounded-xl border p-4"
+    [class.border-dark-border]="isDark()"
+    [class.bg-dark-surface]="isDark()"
+    [class.border-light-border]="!isDark()"
+    [class.bg-light-surface]="!isDark()"
+  >
+    <div class="mb-3 flex items-center justify-between gap-2">
+      <p
+        class="text-sm font-semibold"
+        [class.text-dark-text-bright]="isDark()"
+        [class.text-light-text-bright]="!isDark()"
+      >
+        {{ title() }}
+      </p>
+      <div class="flex items-center gap-2">
+        <app-ui-action-button
+          label="Cancel"
+          [isDark]="isDark()"
+          variant="danger"
+          appearance="outline"
+          [disabled]="!canCancelCurrentAction()"
+          (clicked)="requestCancelCurrentAction()"
+        />
+        <app-ui-action-button
+          label="Copy"
+          [isDark]="isDark()"
+          variant="neutral"
+          appearance="outline"
+          (clicked)="copyConsoleToClipboard()"
+        />
+        <app-ui-action-button
+          label="Clear"
+          [isDark]="isDark()"
+          variant="neutral"
+          appearance="outline"
+          (clicked)="clearConsole()"
+        />
+      </div>
+    </div>
+    <div
+      class="h-56 overflow-hidden rounded-lg border"
+      [class.border-dark-border]="isDark()"
+      [class.border-light-border]="!isDark()"
+      (wheel)="onConsoleWheel($event)"
+    >
+      <ng-terminal #flashTerminal [xtermOptions]="terminalOptions()" />
+    </div>
+  </section>
+}

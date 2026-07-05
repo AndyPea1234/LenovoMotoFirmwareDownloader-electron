@@ -1,0 +1,172 @@
+<section
+  class="rounded-xl border p-5 transition-all duration-300"
+  [class.border-dark-border-bright]="store.isDark()"
+  [class.bg-dark-surface]="store.isDark()"
+  [class.border-light-border]="!store.isDark()"
+  [class.bg-light-elevated]="!store.isDark()"
+  [class.shadow-md]="!store.isDark()"
+>
+  <div class="flex items-center justify-between gap-4">
+    <div>
+      <h3
+        class="text-xl font-bold uppercase tracking-wide"
+        [class.text-dark-text-bright]="store.isDark()"
+        [class.text-light-text-bright]="!store.isDark()"
+      >
+        Downloads
+      </h3>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <app-ui-action-button
+        label="Refresh local files"
+        [isDark]="store.isDark()"
+        size="sm"
+        (clicked)="store.refreshLocalDownloadedFiles()"
+      />
+      <app-ui-action-button
+        label="Clear actions"
+        [isDark]="store.isDark()"
+        size="sm"
+        [disabled]="store.downloadHistory().length === 0"
+        (clicked)="store.clearDownloadHistory()"
+      />
+    </div>
+  </div>
+
+  <p
+    class="mt-2 font-mono text-xs uppercase tracking-wider"
+    [class.text-dark-text-dim]="store.isDark()"
+    [class.text-light-text-dim]="!store.isDark()"
+  >
+    Files:
+    <span
+      [class.text-accent]="store.isDark()"
+      [class.text-accent]="!store.isDark()"
+    >{{ store.localDownloadedFiles().length }}</span>
+    <span class="mx-2 opacity-30">|</span>
+    Actions:
+    <span
+      [class.text-accent]="store.isDark()"
+      [class.text-accent]="!store.isDark()"
+    >{{ store.downloadHistory().length }}</span>
+  </p>
+
+  <app-rescue-flash-console
+    [title]="'Rescue Console'"
+    [context]="'firmware'"
+    [isDark]="store.isDark()"
+    [download]="store.firmwareDownload()"
+    [statusText]="store.status()"
+    (cancelRequested)="store.cancelDownloadById($event)"
+  />
+
+  @if (store.localDownloadedFiles().length > 0) {
+    <div class="mt-6">
+      <h4
+        class="flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-wider"
+        [class.text-success]="store.isDark()"
+        [class.text-success]="!store.isDark()"
+      >
+        <span>◈</span>
+        <span>Downloaded Archives ({{ store.localDownloadedFiles().length }})</span>
+      </h4>
+      <div class="mt-3 grid gap-2">
+        @for (file of store.localDownloadedFiles(); track file.fullPath) {
+          <app-local-downloaded-file-card
+            [file]="file"
+            [isDark]="store.isDark()"
+            (rescueRequested)="startRescueLiteFromLocal($event)"
+            (rescueDryRunRequested)="startRescueLiteDryRunFromLocal($event)"
+          />
+        }
+      </div>
+    </div>
+  } @else {
+    <div
+      class="mt-6 rounded-lg border border-dashed p-6 text-center"
+      [class.border-dark-border]="store.isDark()"
+      [class.border-light-border]="!store.isDark()"
+    >
+      <p
+        class="font-mono text-sm"
+        [class.text-dark-text-dim]="store.isDark()"
+        [class.text-light-text-dim]="!store.isDark()"
+      >
+        <span
+          [class.text-warning]="store.isDark()"
+          [class.text-warning]="!store.isDark()"
+        >▸</span>
+        No archives found in ~/Downloads/LenovoMotoFirmwareDownloader
+      </p>
+    </div>
+  }
+
+  <div class="mt-6">
+    <h4
+      class="flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-wider"
+      [class.text-accent]="store.isDark()"
+      [class.text-accent]="!store.isDark()"
+    >
+      <span>◈</span>
+      <span>Actions ({{ store.downloadHistory().length }})</span>
+    </h4>
+
+    @if (store.downloadHistory().length > 0) {
+      <div class="mt-3 grid gap-2">
+        @for (entry of store.downloadHistory(); track entry.downloadId) {
+          <app-download-history-entry-card [entry]="entry" [isDark]="store.isDark()" />
+        }
+      </div>
+    } @else {
+      <div
+        class="mt-3 rounded-lg border border-dashed p-4 text-center"
+        [class.border-dark-border]="store.isDark()"
+        [class.border-light-border]="!store.isDark()"
+      >
+        <p
+          class="font-mono text-sm"
+          [class.text-dark-text-dim]="store.isDark()"
+          [class.text-light-text-dim]="!store.isDark()"
+        >
+          No actions yet.
+        </p>
+      </div>
+    }
+  </div>
+</section>
+
+<app-rescue-options-dialog
+  [isOpen]="rescueDialogOpen"
+  [isDark]="store.isDark()"
+  [title]="rescueDialogTitle()"
+  [description]="rescueDialogDescription()"
+  [targetLabel]="rescueDialogTargetLabel()"
+  [dryRun]="rescueDialogDryRun"
+  [dataReset]="rescueDialogDataReset"
+  [flashTransport]="rescueDialogFlashTransport"
+  [qdlStorage]="rescueDialogQdlStorage"
+  [qdlSerial]="rescueDialogQdlSerial"
+  [qdloaderDriverInstallBusy]="installingWindowsQdloaderDriver"
+  [qdloaderDriverInstalled]="windowsQdloaderDriverInstalled"
+  [spdDriverInstallBusy]="installingWindowsSpdDriver"
+  [spdDriverInstalled]="windowsSpdDriverInstalled"
+  [mtkDriverInstallBusy]="installingWindowsMtkDriver"
+  [mtkDriverInstalled]="windowsMtkDriverInstalled"
+  [showWindowsDriverInstall]="store.appInfo()?.platform === 'win32'"
+  (close)="closeRescueDialog()"
+  (confirm)="confirmRescueDialog()"
+  (installWindowsQdloaderDriver)="installWindowsQdloaderDriver()"
+  (installWindowsSpdDriver)="installWindowsSpdDriver()"
+  (installWindowsMtkDriver)="installWindowsMtkDriver()"
+  (dataResetChange)="setRescueDialogDataReset($event)"
+  (flashTransportChange)="setRescueDialogFlashTransport($event)"
+  (qdlStorageChange)="setRescueDialogQdlStorage($event)"
+  (qdlSerialChange)="setRescueDialogQdlSerial($event)"
+/>
+
+<app-rescue-dry-run-plan-dialog
+  [isDark]="store.isDark()"
+  [plan]="store.rescueDryRunPlanDialog()"
+  (close)="closeDryRunPlanDialog()"
+/>

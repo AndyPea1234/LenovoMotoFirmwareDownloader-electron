@@ -1,0 +1,3 @@
+var t=(e,o)=>{let n=document.createElement("pre");n.style.margin="16px",n.style.padding="12px",n.style.border="1px solid #fecaca",n.style.background="#fff1f2",n.style.color="#881337",n.style.whiteSpace="pre-wrap",n.style.fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace",n.textContent=`${e}
+
+${o instanceof Error?o.stack??o.message:String(o)}`,document.body.innerHTML="",document.body.appendChild(n)};window.addEventListener("error",e=>{t("Unhandled window error",e.error??e.message)});window.addEventListener("unhandledrejection",e=>{t("Unhandled promise rejection",e.reason)});import("./chunk-35YWTZN4.js").then(async({bootstrapLmfdApp:e})=>{await e()}).catch(e=>{console.error(e),t("Application bootstrap failed",e)});

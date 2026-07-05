@@ -1,0 +1,190 @@
+@if (variant(); as activeVariant) {
+  <article
+    class="rounded-xl border p-4 transition-all"
+    [class.border-dark-border]="isDark()"
+    [class.bg-dark-surface]="isDark()"
+    [class.border-light-border]="!isDark()"
+    [class.bg-light-surface]="!isDark()"
+  >
+    <div class="flex items-center gap-2">
+      <p
+        class="text-sm font-bold uppercase tracking-wide"
+        [class.text-dark-text-bright]="isDark()"
+        [class.text-light-text-bright]="!isDark()"
+      >
+        {{ activeVariant.romName }}
+      </p>
+
+      @if (activeVariant.selectedParameters && activeVariant.selectedParameters['country']) {
+        <span
+          class="rounded-lg border px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider"
+          [class.border-accent]="isDark()"
+          [class.text-accent]="isDark()"
+          [class.border-accent]="!isDark()"
+          [class.text-accent]="!isDark()"
+        >
+          {{ activeVariant.selectedParameters['country'] }}
+        </span>
+      }
+    </div>
+
+    <p class="mt-1 font-mono text-[10px]" [class.text-dark-text-dim]="isDark()" [class.text-light-text-dim]="!isDark()">
+      <span class="text-accent">published:</span> {{ activeVariant.publishDate || 'Unknown' }}
+    </p>
+    <p class="mt-0.5 font-mono text-[10px] opacity-70" [class.text-dark-text-dim]="isDark()" [class.text-light-text-dim]="!isDark()">
+      match_id: {{ activeVariant.romMatchIdentifier || 'N/A' }}
+    </p>
+
+    @if (hasRecipeAvailable()) {
+      <p class="mt-1 font-mono text-[10px] text-success">
+        ✓ Recipe available
+      </p>
+    } @else {
+      <p class="mt-1 font-mono text-[10px] text-warning">
+        ⚠ Recipe unavailable (will fallback to local XML/script)
+      </p>
+    }
+
+    @if (activeVariant.selectedParameters?.['lmsaCode'] === '3040') {
+      <p class="mt-1 font-mono text-[10px] text-warning">
+        ⚠ LMSA code 3040: may require extra confirmation
+      </p>
+    }
+
+    <div class="mt-3 flex flex-wrap gap-2">
+      @if (!isVariantDownloadActive()) {
+        <button
+          class="rounded-lg border px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors duration-200"
+          [class.border-accent]="isDark()"
+          [class.text-accent]="isDark()"
+          [class.hover:bg-accent/10]="isDark()"
+          [class.border-accent]="!isDark()"
+          [class.text-accent]="!isDark()"
+          [class.hover:bg-accent-subtle]="!isDark()"
+          type="button"
+          (click)="onRequestRescue()"
+        >
+          ⚡ Rescue Lite
+        </button>
+        <button
+          class="rounded-lg border px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors duration-200"
+          [class.border-accent]="isDark()"
+          [class.text-accent]="isDark()"
+          [class.hover:bg-accent/10]="isDark()"
+          [class.border-accent]="!isDark()"
+          [class.text-accent]="!isDark()"
+          [class.hover:bg-accent-subtle]="!isDark()"
+          type="button"
+          (click)="onRequestRescueDryRun()"
+        >
+          Dry Run
+        </button>
+      }
+
+      @if (canAttachRecipeToLocalZip() || linkingVariantRecipe()) {
+        <button
+          class="rounded-lg border px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider transition-all duration-200"
+          [class.border-accent]="isDark()"
+          [class.text-accent]="isDark()"
+          [class.hover:bg-accent-subtle]="isDark()"
+          [class.border-accent]="!isDark()"
+          [class.text-accent]="!isDark()"
+          [class.hover:bg-accent-light]="!isDark()"
+          [disabled]="linkingVariantRecipe()"
+          type="button"
+          (click)="onAttachRecipeToLocalZip()"
+        >
+          {{ linkingVariantRecipe() ? 'Linking...' : 'Use local archive' }}
+        </button>
+      }
+
+      @if (!hasLocalZipForVariant()) {
+        <button
+          class="rounded-lg border px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
+          [class.border-accent]="isDark()"
+          [class.bg-accent]="isDark()"
+          [class.text-dark-bg]="isDark()"
+          [class.hover:bg-accent-hover]="isDark()"
+          [class.hover:shadow-md]="isDark()"
+          [class.border-accent]="!isDark()"
+          [class.bg-accent-light]="!isDark()"
+          [class.text-accent]="!isDark()"
+          [class.hover:bg-accent-subtle]="!isDark()"
+          type="button"
+          (click)="onStartDownload()"
+        >
+          @if (isVariantDownloadActive() && getVariantStatus() === 'canceling') {
+            Cancelling...
+          } @else if (isVariantDownloadActive()) {
+            @if (getVariantMode() === 'rescue-lite') {
+              @if (getVariantDryRun()) {
+                Dry run...
+              } @else {
+                Running...
+              }
+            } @else {
+              Downloading...
+            }
+          } @else {
+            ↓ Download
+          }
+        </button>
+      } @else {
+        <span
+          class="rounded-lg border px-2 py-1 font-mono text-[10px]"
+          [class.border-success]="isDark()"
+          [class.text-success]="isDark()"
+          [class.border-success]="!isDark()"
+          [class.text-success]="!isDark()"
+        >
+          ✓ In Downloads
+        </span>
+      }
+
+      @if (isVariantDownloadTracked()) {
+        <span
+          class="rounded-lg border px-2 py-1 font-mono text-[10px] uppercase"
+          [class.border-dark-border-bright]="isDark()"
+          [class.text-dark-text]="isDark()"
+          [class.border-light-border-bright]="!isDark()"
+          [class.text-light-text]="!isDark()"
+        >
+          {{ getVariantStatus() }}
+        </span>
+        @if (getVariantMode() === 'rescue-lite' && isVariantDownloadActive()) {
+          <span
+            class="rounded-lg border px-2 py-1 font-mono text-[10px]"
+            [class.border-success]="isDark()"
+            [class.text-success]="isDark()"
+            [class.border-success]="!isDark()"
+            [class.text-success]="!isDark()"
+          >
+            Rescue{{ getVariantDryRun() ? ' (Dry)' : '' }}
+          </span>
+        }
+      }
+    </div>
+
+    <a
+      class="mt-2 block break-all font-mono text-[10px] underline text-accent"
+      [href]="activeVariant.romUrl"
+      target="_blank"
+      rel="noopener"
+    >
+      {{ activeVariant.romUrl }}
+    </a>
+
+    @if (activeVariant.recipeUrl) {
+      <p class="mt-1 break-all font-mono text-[10px]" [class.text-dark-text-dim]="isDark()" [class.text-light-text-dim]="!isDark()">
+        recipe: {{ activeVariant.recipeUrl }}
+      </p>
+    }
+
+    <p class="mt-1 break-all font-mono text-[10px]" [class.text-dark-text-dim]="isDark()" [class.text-light-text-dim]="!isDark()">
+      params:
+      @for (entry of activeVariant.selectedParameters || {} | keyvalue; track entry.key) {
+        <span>{{ entry.key }}={{ entry.value }} </span>
+      }
+    </p>
+  </article>
+}

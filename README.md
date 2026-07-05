@@ -1,0 +1,120 @@
+# Lenovo Moto Firmware Downloader
+
+Repo này dành riêng cho Ventura vì electrobun yêu cầu Sonoma+ và bun thì yêu cầu Ventura+. Hiện tại chỉ hỗ trợ để tải firmware bằng cách lấy URL trong Terminal và chưa hỗ trợ restore, hiện tại tui không có dư máy để test. Bun cũ trên Big Sur/Monterey hên xui.
+
+## 🚀 Cài đặt và chạy
+
+### 1. Clone dự án
+```bash
+git clone https://github.com/AndyPea1234/LenovoMotoFirmwareDownloader-electron.git
+cd LenovoMotoFirmwareDownloader-electron
+```
+
+### 2. Cài dependencies
+```bash
+bun install
+cd web && bun install && cd ..
+```
+
+### 3. Build Angular và chạy app
+```bash
+bun run start
+```
+
+Sau khi đăng nhập xong, chọn tim mã máy trong danh sách. Nếu muốn tìm máy khác ngách hơn, ví dụ máy nội địa Trung Quốc thì mở DevTools bằng cách nhập cmd + option + I. Chọn tab Console sẽ có hướng dẫn. Ví dụ:
+```bash
+console.log("window.desktopApi.lookupReadSupportByImei({model:{modelName:'XT2321-1'},imei:'357354621261890',roCarrier:'reteu',channelId:'reteu'}).then(d=>console.log(d));");
+```
+Thay modelName, imei, roCarrier, channelId theo máy. Sau đó Enter trong Console, sẽ có lệnh trong Terminal, theo dõi trong đó sẽ có thông tin firmware. Với máy nội địa cần 3 cái là thông số fingerprint, baseband và roCarrier sẽ được hướng dẫn lấy thông số trong Console bằng lệnh adb.
+-------------------------------------------------------------------------------------------------------
+
+Desktop app for Motorola/Lenovo firmware lookup via LMSA, built with Bun + Electrobun + Angular. Features flashing abilities, backup & restore of snapshots.
+You can download prebuilt binaries from the GitHub Releases page: [Releases](https://github.com/enigma550/LenovoMotoFirmwareDownloader/releases)
+
+## Why this app?
+
+Lenovo and Motorola only provide their official Software Fix (LMSA) software for Windows, leaving users on Linux and macOS without a way to download firmware or perform rescue operations on their devices. This app was created to fill that gap - giving users on any operating system the same access to Lenovo/Motorola firmware downloads and device rescue functionality that was previously exclusive to Windows.
+
+## ⚠️ Disclaimer
+
+The Rescue Lite (experimental) feature in this app performs firmware flashing operations on your device. Use it entirely at your own risk. The author of this application is not responsible for any damage, data loss, bricked devices, or other issues that may result from using this software. Always ensure you have selected the correct firmware for your specific device model before proceeding.
+
+## Usage
+
+1. Download and install the app from [Releases](https://github.com/enigma550/LenovoMotoFirmwareDownloader/releases).
+  1.1 On Windows: Click on "Switch to LMFD" 
+4. Click **Sign in** - your browser will open the Lenovo login page.
+5. After signing in, click on "Open in Lenovo Moto Firmware Downloader".
+6. Search for your device model to browse available firmware.
+7. Download firmware packages directly to your computer.
+
+Rescue Lite *(Optional)* (Not fully functional):
+- Use **Rescue Lite** *(experimental)* to flash firmware onto a device.
+- Use **Rescue Lite (Dry run)** *(experimental)* to see flash commands used for Rescue Lite without execution.
+- QDL/EDL rescue mode uses bundled `qdl` in official builds. Local/dev runs can still use `qdl` from `PATH`.
+- Unisoc/SPD rescue mode uses bundled `spd-bun-tool` in official builds.
+- MediaTek rescue mode is not supported yet.
+
+All data is stored locally on your machine - nothing is sent to any third-party server.
+
+---
+
+## Development
+
+### Install
+```bash
+bun install
+cd web && bun install
+```
+
+### Run (dev)
+```bash
+bun run start
+```
+
+For clean dev data reset before start:
+```bash
+bun run start:clean
+```
+
+### Scripts
+| Command | Description |
+|---|---|
+| `bun run start` | Primary development launch script |
+| `bun run start:clean` | Reset dev data and start |
+| `bun run start:native` | Start with Linux native GTK/WebKit renderer |
+| `bun run start:cef` | Start with Linux CEF renderer |
+| `bun run web:build` | Build the Angular frontend |
+| `bun run prepare:all` | Build Angular and sync views to Electrobun |
+| `bun run dev:data:reset` | Reset local config/models data |
+| `bun run build:stable` | Full production build for the current platform |
+| `bun run build:canary` | Canary build for the current platform |
+| `bun run build:dev` | Development build for the current platform |
+| `bun run check` | Type-check the codebase |
+
+### Build Hooks
+- `tooling/build/finalize-app.ts` - postBuild hook that packages bundled runtime dependencies and applies platform-specific app metadata/assets for Linux, Windows, and macOS.
+- `tooling/build/finalize-installer.ts` - postPackage hook that builds Linux AppImage artifacts and patches/repackages the Windows Setup installer.
+
+### Storage Paths
+- Dev from repo: `./assets/data/config.json` and `./assets/data/models-catalog.json`
+- Packaged app: OS app-data folder (`<appData>/<identifier>/<channel>/assets/data/`)
+
+### Cross-Platform Builds (macOS + Windows + Linux)
+Electrobun builds for the current host platform.  
+So macOS builds must run on macOS, and Windows builds must run on Windows.
+
+This repo includes a GitHub Actions matrix workflow:
+- `.github/workflows/lmfd-build-matrix.yml`
+
+Run it from **Actions → Build Matrix → Run workflow** and choose:
+- `dev`
+- `canary`
+- `stable`
+
+The workflow builds for:
+- **macOS**: ARM64 (`macos-latest`), x64 (`macos-15-intel`)
+- **Linux**: x64 (`ubuntu-latest`), ARM64 (`ubuntu-24.04-arm`)
+- **Windows**: x64 (`windows-latest`)
+
+Build artifacts are uploaded to `artifacts/`.
