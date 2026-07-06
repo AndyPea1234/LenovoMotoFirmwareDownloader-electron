@@ -1,6 +1,6 @@
-# Lenovo Moto Firmware Downloader
+# Lenovo Moto Firmware Downloader - electron
 
-Repo này dành riêng cho Ventura vì electrobun yêu cầu Sonoma+ và bun thì yêu cầu Ventura+. Hiện tại chỉ hỗ trợ để tải firmware bằng cách lấy URL trong Terminal và chưa hỗ trợ restore, hiện tại tui không có dư máy để test. Bun cũ trên Big Sur/Monterey hên xui.
+Phiên bản electron của LenovoMotoFirmwareDownloader by enigma550 dành cho macOS Tempura.
 
 ## 🚀 Cài đặt và chạy
 
@@ -20,12 +20,19 @@ cd web && bun install && cd ..
 ```bash
 bun run start
 ```
-
-Sau khi đăng nhập xong, chọn tim mã máy trong danh sách. Nếu muốn tìm máy khác ngách hơn, ví dụ máy nội địa Trung Quốc thì mở DevTools bằng cách nhập cmd + option + I. Chọn tab Console sẽ có hướng dẫn. Ví dụ:
+Hoặc sau khi đã chạy bun run start lần đầu:
 ```bash
-console.log("window.desktopApi.lookupReadSupportByImei({model:{modelName:'XT2321-1'},imei:'357354621261890',roCarrier:'reteu',channelId:'reteu'}).then(d=>console.log(d));");
+bunx electron .
 ```
-Thay modelName, imei, roCarrier, channelId theo máy. Sau đó Enter trong Console, sẽ có lệnh trong Terminal, theo dõi trong đó sẽ có thông tin firmware. Với máy nội địa cần 3 cái là thông số fingerprint, baseband và roCarrier sẽ được hướng dẫn lấy thông số trong Console bằng lệnh adb.
+
+Sau khi đăng nhập xong, chọn tim mã máy trong danh sách. Nếu muốn tìm máy khác ngách hơn thì chọn Required Params để thêm các thông số fingerPrint, fsgVersion.qcom, roCarrier... Cách lấy thông số bằng adb:
+```bash
+fingerPrint     → adb shell getprop ro.build.fingerprint
+fsgVersion.qcom → adb shell getprop vendor.ril.baseband.config.version
+roCarrier       → adb shell getprop ro.carrier
+````
+
+Note: Chức năng AppStore Aurora, Fetch Repice và Desktop chưa hoạt động.
 -------------------------------------------------------------------------------------------------------
 
 Desktop app for Motorola/Lenovo firmware lookup via LMSA, built with Bun + Electrobun + Angular. Features flashing abilities, backup & restore of snapshots.
