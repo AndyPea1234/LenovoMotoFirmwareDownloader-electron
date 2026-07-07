@@ -631,25 +631,221 @@ export async function rescueLiteFirmware(payload) {
   }
 }
 
+// core/index.js - SỬA HÀM rescueLiteFirmwareFromLocal
 export async function rescueLiteFirmwareFromLocal(payload) {
   try {
     coreLog(`🔧 [rescueLiteFirmwareFromLocal] Called with payload: ${JSON.stringify(payload)}`);
     
+    const { filePath, fileName, extractedDir, recipeUrl, dryRun = true } = payload;
+    
+    // ===== 1. TÌM FLASHFILE.XML =====
+    let flashfilePath = null;
+    let extractPath = null;
+    
+    // Thử tìm trong thư mục đã extract
+    if (recipeUrl && recipeUrl.includes('#')) {
+      const recipeFile = recipeUrl.split('#')[1];
+      coreLog(`📄 Recipe file: ${recipeFile}`);
+      
+      const baseName = fileName ? path.basename(fileName, path.extname(fileName)) : path.basename(filePath, path.extname(filePath));
+      const possiblePaths = [
+        extractedDir,
+        path.join(path.dirname(filePath), `${path.basename(filePath, '.zip')}_extracted`),
+        path.join(path.dirname(filePath), `${path.basename(filePath, '.xml.zip')}_extracted`),
+        path.join(path.dirname(filePath), `${baseName}_extracted`),
+      ];
+      
+      for (const p of possiblePaths) {
+        if (p) {
+          const testPath = path.join(p, recipeFile);
+          if (fs.existsSync(testPath)) {
+            flashfilePath = testPath;
+            extractPath = p;
+            coreLog(`✅ Found flashfile.xml at: ${flashfilePath}`);
+            break;
+          }
+        }
+      }
+    }
+    
+    // Nếu chưa tìm thấy, tìm kiếm trong thư mục
+    if (!flashfilePath) {
+      const dir = path.dirname(filePath);
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const testPath = path.join(dir, entry.name, 'flashfile.xml');
+          if (fs.existsSync(testPath)) {
+            flashfilePath = testPath;
+            extractPath = path.join(dir, entry.name);
+            coreLog(`✅ Found flashfile.xml in subfolder: ${flashfilePath}`);
+            break;
+          }
+        }
+      }
+    }
+    
+    if (!flashfilePath) {
+      coreLog(`❌ flashfile.xml not found`);
+      return { 
+        ok: false, 
+        error: 'flashfile.xml not found. Please extract firmware first.',
+        data: { commands: [] }
+      };
+    }
+    
+    // ===== 2. ĐỌC VÀ PARSE FLASHFILE.XML =====
+    const content = fs.readFileSync(flashfilePath, 'utf8');
+    coreLog(`📄 flashfile.xml size: ${content.length} bytes`);
+    
+    const commands = parseFlashfileCommands(content);
+    coreLog(`✅ Found ${commands.length} flash commands`);
+    
+    // ===== 3. NẾU KHÔNG DRY RUN, THỰC THI LỆNH =====
+    let executionResult = null;
+    
+    if (!dryRun) {
+      coreLog(`⚡ [EXECUTE] Starting flash execution...`);
+      
+      const results = [];
+      const workingDir = extractPath || path.dirname(flashfilePath);
+      
+      for (let i = 0; i < commands.length; i++) {
+        const cmd = commands[i];
+        const commandStr = cmd.command;
+        
+        coreLog(`🔄 [${i+1}/${commands.length}] ${commandStr}`);
+        
+        try {
+          const output = execSync(commandStr, {
+            cwd: workingDir,
+            encoding: 'utf8',
+            stdio: 'pipe',
+            timeout: 120000
+          });
+          
+          results.push({
+            index: i,
+            command: commandStr,
+            status: 'success',
+            output: output.trim() || 'OK'
+          });
+          
+          coreLog(`✅ Command ${i+1} succeeded`);
+          
+        } catch (error) {
+          results.push({
+            index: i,
+            command: commandStr,
+            status: 'failed',
+            error: error.message,
+            output: error.stdout || '',
+            stderr: error.stderr || ''
+          });
+          
+          coreLog(`❌ Command ${i+1} failed: ${error.message}`);
+          break; // Dừng nếu có lỗi
+        }
+      }
+      
+      const succeeded = results.filter(r => r.status === 'success').length;
+      const failed = results.filter(r => r.status === 'failed').length;
+      
+      executionResult = {
+        total: commands.length,
+        succeeded,
+        failed,
+        results
+      };
+      
+      coreLog(`✅ Execution completed: ${succeeded} succeeded, ${failed} failed`);
+    }
+    
+    // ===== 4. TRẢ VỀ KẾT QUẢ =====
     return {
       ok: true,
       data: {
-        status: 'success',
-        message: 'Rescue lite firmware from local completed',
-        ...payload
+        status: dryRun ? 'dry-run' : (executionResult?.failed === 0 ? 'success' : 'partial'),
+        message: dryRun 
+          ? `Dry run: Found ${commands.length} flash commands (no execution)`
+          : `Executed ${executionResult?.succeeded || 0}/${commands.length} commands`,
+        commands: commands,
+        flashfilePath: flashfilePath,
+        extractPath: extractPath,
+        dryRun: dryRun,
+        execution: executionResult // Chỉ có khi không dry run
       }
     };
+    
   } catch (error) {
     coreLog(`❌ [rescueLiteFirmwareFromLocal] Error: ${error.message}`);
-    return {
-      ok: false,
-      error: error.message
+    return { 
+      ok: false, 
+      error: error.message,
+      data: { commands: [] }
     };
   }
+}
+
+function parseFlashfileCommands(content) {
+  const commands = [];
+  
+  try {
+    // ===== 1. THÊM LỆNH CHUẨN FASTBOOT =====
+    commands.push({
+      type: 'getvar',
+      command: 'fastboot getvar max-sparse-size'
+    });
+    commands.push({
+      type: 'oem',
+      command: 'fastboot oem fb_mode_set'
+    });
+    
+    // ===== 2. PARSE CÁC STEP =====
+    const stepRegex = /<step\s+([^>]*)>/gi;
+    let match;
+    
+    while ((match = stepRegex.exec(content)) !== null) {
+      const attrs = match[1];
+      
+      const opMatch = attrs.match(/operation=["']([^"']+)["']/i);
+      const operation = opMatch ? opMatch[1] : '';
+      
+      const partMatch = attrs.match(/partition=["']([^"']+)["']/i);
+      const partition = partMatch ? partMatch[1] : '';
+      
+      const fileMatch = attrs.match(/filename=["']([^"']+)["']/i);
+      const filename = fileMatch ? fileMatch[1] : '';
+      
+      if (operation === 'flash' && partition && filename) {
+        commands.push({
+          type: 'flash',
+          command: `fastboot flash ${partition} ${filename}`
+        });
+      } else if (operation === 'erase' && partition) {
+        commands.push({
+          type: 'erase',
+          command: `fastboot erase ${partition}`
+        });
+      }
+    }
+    
+    // ===== 3. THÊM LỆNH KẾT THÚC =====
+    commands.push({
+      type: 'oem',
+      command: 'fastboot oem fb_mode_clear'
+    });
+    commands.push({
+      type: 'reboot',
+      command: 'fastboot reboot'
+    });
+    
+  } catch (error) {
+    coreLog(`⚠️ Parse error: ${error.message}`);
+  }
+  
+  coreLog(`📋 Parsed ${commands.length} commands`);
+  return commands;
 }
 
 // ============================================================
@@ -1788,6 +1984,140 @@ export async function resumeDownload(payload) {
 }
 
 // ============================================================
+// ===== RESCUE EXECUTOR - FLASH THẬT =====
+// ============================================================
+
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
+
+/**
+ * Thực thi các lệnh rescue (fastboot)
+ */
+export async function executeRescueCommands(commands, options = {}) {
+  const { 
+    dryRun = false, 
+    workingDir = process.cwd(),
+    onProgress = null,
+    stopOnError = true
+  } = options;
+
+  coreLog(`🔧 [executeRescueCommands] Starting execution of ${commands.length} commands`);
+  coreLog(`🔧 [executeRescueCommands] Dry run: ${dryRun}, Working dir: ${workingDir}`);
+
+  const results = [];
+
+  for (let i = 0; i < commands.length; i++) {
+    const cmd = commands[i];
+    const commandStr = cmd.command || cmd;
+
+    coreLog(`🔄 [execute] ${i + 1}/${commands.length}: ${commandStr}`);
+
+    // Báo progress
+    if (onProgress) {
+      onProgress(commandStr, i + 1, commands.length);
+    }
+
+    if (dryRun) {
+      results.push({
+        index: i,
+        command: commandStr,
+        status: 'dry-run',
+        output: `[DRY RUN] Would execute: ${commandStr}`
+      });
+      continue;
+    }
+
+    try {
+      const { stdout, stderr } = await execAsync(commandStr, {
+        cwd: workingDir,
+        timeout: 120000, // 2 phút timeout cho mỗi lệnh
+        maxBuffer: 50 * 1024 * 1024, // 50MB buffer
+        shell: true
+      });
+
+      const output = stdout || stderr || 'Command executed successfully';
+      coreLog(`✅ [execute] Command ${i + 1} succeeded`);
+
+      results.push({
+        index: i,
+        command: commandStr,
+        status: 'success',
+        output: output.trim()
+      });
+
+    } catch (error) {
+      const errorMsg = error.message || 'Unknown error';
+      coreLog(`❌ [execute] Command ${i + 1} failed: ${errorMsg}`);
+
+      results.push({
+        index: i,
+        command: commandStr,
+        status: 'failed',
+        error: errorMsg,
+        output: error.stdout || '',
+        stderr: error.stderr || ''
+      });
+
+      if (stopOnError) {
+        coreLog(`🛑 [execute] Stopping due to error at command ${i + 1}`);
+        break;
+      }
+    }
+  }
+
+  const succeeded = results.filter(r => r.status === 'success').length;
+  const failed = results.filter(r => r.status === 'failed').length;
+  const dryRunCount = results.filter(r => r.status === 'dry-run').length;
+
+  coreLog(`✅ [executeRescueCommands] Completed: ${succeeded} succeeded, ${failed} failed, ${dryRunCount} dry-run`);
+
+  return {
+    total: commands.length,
+    executed: results.length,
+    succeeded: succeeded,
+    failed: failed,
+    dryRun: dryRunCount,
+    dryRunMode: dryRun,
+    results: results
+  };
+}
+
+/**
+ * Kiểm tra tool có tồn tại không
+ */
+export async function checkRescueTool(transport) {
+  try {
+    const toolMap = {
+      fastboot: 'fastboot --version',
+      qdl: 'qdl --version',
+      spd: 'spd-bun-tool --version'
+    };
+
+    const command = toolMap[transport];
+    if (!command) return false;
+
+    await execAsync(command, { timeout: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Lấy đường dẫn tool
+ */
+export function getRescueToolPath(transport) {
+  const toolMap = {
+    fastboot: 'fastboot',
+    qdl: 'qdl',
+    spd: 'spd-bun-tool'
+  };
+  return toolMap[transport] || 'fastboot';
+}
+
+// ============================================================
 // ===== DEFAULT EXPORT =====
 // ============================================================
 
@@ -1877,5 +2207,8 @@ export default {
   rescueLiteFirmware,
   rescueLiteFirmwareFromLocal,
   getRecipeContent,
-  parseFlashfile
+  parseFlashfile,
+  executeRescueCommands,
+  checkRescueTool,
+  getRescueToolPath
 };

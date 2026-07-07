@@ -1,4 +1,4 @@
-// main.electron.js - HOÀN CHỈNH
+// main.electron.js - FIXED
 import { app, BrowserWindow, protocol, shell, ipcMain } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -32,7 +32,9 @@ import {
   extractLocalFirmware,
   deleteLocalFile,
   getWindowsQdloaderDriverStatus,
-  installWindowsQdloaderDriver
+  installWindowsQdloaderDriver,
+  getRecipeContent,
+  parseFlashfile
 } from './core/index.js';
 
 // ===== IPC PROGRESS HANDLER =====
@@ -1235,6 +1237,7 @@ function createWindow() {
     }, 500);
   });
 
+  
   bootstrapSessionCookie().then(() => {
     writeLog('✅ [Main] Session cookie bootstrapped');
     
@@ -1257,7 +1260,8 @@ function createWindow() {
       isFirstLoad = false;
     }
 
-    win.webContents.executeJavaScript(`
+    // Định nghĩa desktopApi trong renderer
+    const desktopApiScript = `
       window.desktopApi = {
         isDesktop: true,
         startAuth: () => {
@@ -1330,56 +1334,33 @@ function createWindow() {
           });
         },
         getReadSupportHints: (modelName) => {
-      console.log('🔍 [Renderer] getReadSupportHints CALLED! Model:', modelName);
-      
-      return new Promise((resolve, reject) => {
-        fetch('app://localhost/api/read-support/hints', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ modelName })
-        })
-        .then(res => {
-          console.log('📦 [Renderer] Response status:', res.status);
-          if (!res.ok) {
-            throw new Error(\`HTTP \${res.status}\`);
-          }
-          return res.json();
-        })
-        .then(data => {
-          console.log('✅ [Renderer] Raw response:', data);
-          
-          const result = {
-            ok: true, 
-            data: {          
-              requiredParameters: data.params || [],
-              platform: data.platform || '',
-              modelName: modelName
+          console.log('🔍 [Renderer] getReadSupportHints CALLED! Model:', modelName);
+          return fetch('app://localhost/api/read-support/hints', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ modelName })
+          })
+          .then(res => res.json())
+          .then(data => {
+            console.log('✅ [Renderer] getReadSupportHints response:', data);
+            const result = {
+              ok: true,
+              data: {
+                requiredParameters: data.params || [],
+                platform: data.platform || '',
+                modelName: modelName
               }
-          };
-          
-          console.log('✅ [Renderer] Final data for Angular:', result);
-          
-          window._readSupportHintsData = result;
-
-          resolve(result);
-        })
-        .catch(err => {
-          console.error('❌ [Renderer] getReadSupportHints error:', err);
-          const errorResult = { 
-            params: [], 
-            platform: '', 
-            modelName: modelName,
-            hints: [],
-            error: err.message 
-          };
-          window._readSupportHintsData = errorResult;
-          reject(new Error('Failed to load readSupport hints'));
-        });
-      });
-    },
+            };
+            window._readSupportHintsData = result;
+            return result;
+          })
+          .catch(err => {
+            console.error('❌ [Renderer] getReadSupportHints error:', err);
+            return { ok: false, error: err.message, data: { requiredParameters: [], platform: '' } };
+          });
+        },
         lookupReadSupportByImei: (payload) => {
           console.log('🔍 [Renderer] lookupReadSupportByImei CALLED!');
-          console.log('📦 [Renderer] Payload:', payload);
           return fetch('app://localhost/api/read-support/lookup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1389,20 +1370,15 @@ function createWindow() {
           .then(data => {
             console.log('✅ [Renderer] lookupReadSupportByImei response:', data);
             window._lastLookupResult = data;
-            window.dispatchEvent(new CustomEvent('lookup:result', { detail: data }));
             return data;
           })
           .catch(err => {
             console.error('❌ [Renderer] lookupReadSupportByImei error:', err);
-            const errorData = { code: 'ERROR', desc: err.message, content: { variants: [], total: 0 } };
-            window._lastLookupResult = errorData;
-            window.dispatchEvent(new CustomEvent('lookup:error', { detail: errorData }));
-            return errorData;
+            return { ok: false, error: err.message };
           });
         },
         lookupReadSupportBySn: (payload) => {
           console.log('🔍 [Renderer] lookupReadSupportBySn CALLED!');
-          console.log('📦 [Renderer] Payload:', payload);
           return fetch('app://localhost/api/read-support/lookup-sn', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1412,20 +1388,15 @@ function createWindow() {
           .then(data => {
             console.log('✅ [Renderer] lookupReadSupportBySn response:', data);
             window._lastLookupResult = data;
-            window.dispatchEvent(new CustomEvent('lookup:result', { detail: data }));
             return data;
           })
           .catch(err => {
             console.error('❌ [Renderer] lookupReadSupportBySn error:', err);
-            const errorData = { code: 'ERROR', desc: err.message, content: { variants: [], total: 0 } };
-            window._lastLookupResult = errorData;
-            window.dispatchEvent(new CustomEvent('lookup:error', { detail: errorData }));
-            return errorData;
+            return { ok: false, error: err.message };
           });
         },
         lookupReadSupportByParams: (payload) => {
           console.log('🔍 [Renderer] lookupReadSupportByParams CALLED!');
-          console.log('📦 [Renderer] Payload:', payload);
           return fetch('app://localhost/api/read-support/lookup-params', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1435,15 +1406,11 @@ function createWindow() {
           .then(data => {
             console.log('✅ [Renderer] lookupReadSupportByParams response:', data);
             window._lastLookupResult = data;
-            window.dispatchEvent(new CustomEvent('lookup:result', { detail: data }));
             return data;
           })
           .catch(err => {
             console.error('❌ [Renderer] lookupReadSupportByParams error:', err);
-            const errorData = { code: 'ERROR', desc: err.message, content: { variants: [], total: 0 } };
-            window._lastLookupResult = errorData;
-            window.dispatchEvent(new CustomEvent('lookup:error', { detail: errorData }));
-            return errorData;
+            return { ok: false, error: err.message };
           });
         },
         cancelDownload: (downloadId) => {
@@ -1494,7 +1461,6 @@ function createWindow() {
         getAppInfo: () => Promise.resolve({ ok: true, platform: 'darwin', version: '1.0.0' }),
         ping: () => Promise.resolve({ ok: true }),
         getPlayStoreStatus: () => {
-          console.log('📦 [Renderer] getPlayStoreStatus');
           return fetch('app://localhost/api/playstore/status', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
@@ -1503,7 +1469,6 @@ function createWindow() {
           .catch(err => ({ ok: false, available: false, error: err.message }));
         },
         listPlayStoreDownloads: () => {
-          console.log('📦 [Renderer] listPlayStoreDownloads');
           return fetch('app://localhost/api/playstore/downloads', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
@@ -1512,7 +1477,6 @@ function createWindow() {
           .catch(err => ({ ok: false, error: err.message, downloads: [] }));
         },
         searchPlayStoreApps: (payload) => {
-          console.log('🔍 [Renderer] searchPlayStoreApps');
           return fetch('app://localhost/api/playstore/search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1522,7 +1486,6 @@ function createWindow() {
           .catch(err => ({ ok: false, error: err.message, results: [] }));
         },
         getPlayStoreAppDetails: (payload) => {
-          console.log('📦 [Renderer] getPlayStoreAppDetails');
           return fetch('app://localhost/api/playstore/details', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1532,7 +1495,6 @@ function createWindow() {
           .catch(err => ({ ok: false, error: err.message }));
         },
         downloadPlayStoreApp: (payload) => {
-          console.log('📥 [Renderer] downloadPlayStoreApp');
           return fetch('app://localhost/api/playstore/download', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1542,7 +1504,6 @@ function createWindow() {
           .catch(err => ({ ok: false, error: err.message }));
         },
         deletePlayStoreDownload: (payload) => {
-          console.log('🗑️ [Renderer] deletePlayStoreDownload');
           return fetch('app://localhost/api/playstore/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1552,7 +1513,6 @@ function createWindow() {
           .catch(err => ({ ok: false, error: err.message }));
         },
         installPlayStoreApp: (payload) => {
-          console.log('📲 [Renderer] installPlayStoreApp');
           return fetch('app://localhost/api/playstore/install', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1562,7 +1522,6 @@ function createWindow() {
           .catch(err => ({ ok: false, error: err.message }));
         },
         listBackupRestoreSnapshots: () => {
-          console.log('💾 [Renderer] listBackupRestoreSnapshots');
           return fetch('app://localhost/api/backup/snapshots', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
@@ -1571,7 +1530,6 @@ function createWindow() {
           .catch(err => ({ ok: false, error: err.message, snapshots: [] }));
         },
         scanConnectedBackupPreview: () => {
-          console.log('🔍 [Renderer] scanConnectedBackupPreview');
           return fetch('app://localhost/api/backup/scan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
@@ -1580,7 +1538,6 @@ function createWindow() {
           .catch(err => ({ ok: false, connected: false, error: err.message }));
         },
         getConnectedBackupPreviewProgress: () => {
-          console.log('📊 [Renderer] getConnectedBackupPreviewProgress');
           return fetch('app://localhost/api/backup/progress', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
@@ -1589,7 +1546,6 @@ function createWindow() {
           .catch(err => ({ ok: false, error: err.message }));
         },
         cancelConnectedBackupProcess: () => {
-          console.log('🛑 [Renderer] cancelConnectedBackupProcess');
           return fetch('app://localhost/api/backup/cancel', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
@@ -1598,7 +1554,6 @@ function createWindow() {
           .catch(err => ({ ok: false, error: err.message }));
         },
         backupConnectedDevice: (payload) => {
-          console.log('💾 [Renderer] backupConnectedDevice');
           return fetch('app://localhost/api/backup/device', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1608,7 +1563,6 @@ function createWindow() {
           .catch(err => ({ ok: false, connected: false, error: err.message }));
         },
         restoreBackupSnapshot: (payload) => {
-          console.log('🔄 [Renderer] restoreBackupSnapshot');
           return fetch('app://localhost/api/backup/restore', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1618,7 +1572,6 @@ function createWindow() {
           .catch(err => ({ ok: false, connected: false, error: err.message }));
         },
         deleteBackupSnapshot: (payload) => {
-          console.log('🗑️ [Renderer] deleteBackupSnapshot');
           return fetch('app://localhost/api/backup/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1628,7 +1581,6 @@ function createWindow() {
           .catch(err => ({ ok: false, error: err.message }));
         },
         listLocalDownloadedFiles: () => {
-          console.log('📂 [Renderer] listLocalDownloadedFiles');
           return fetch('app://localhost/api/local/files', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
@@ -1637,7 +1589,6 @@ function createWindow() {
           .catch(err => ({ ok: false, error: err.message, files: [] }));
         },
         extractLocalFirmware: (payload) => {
-          console.log('📦 [Renderer] extractLocalFirmware');
           return fetch('app://localhost/api/local/extract', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1647,7 +1598,6 @@ function createWindow() {
           .catch(err => ({ ok: false, error: err.message }));
         },
         deleteLocalFile: (payload) => {
-          console.log('🗑️ [Renderer] deleteLocalFile');
           return fetch('app://localhost/api/local/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1664,68 +1614,6 @@ function createWindow() {
           .then(res => res.json())
           .catch(err => ({ ok: false, installed: false, error: err.message }));
         },
-        attachLocalRecipeFromModel: (payload) => {
-  console.log('📦 [Renderer] attachLocalRecipeFromModel');
-  return fetch('app://localhost/api/local/attach-recipe', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  .then(res => res.json())
-  .catch(err => ({ ok: false, error: err.message }));
-},
-attachLocalRecipeMetadata: (payload) => {
-  console.log('📦 [Renderer] attachLocalRecipeMetadata');
-  return fetch('app://localhost/api/local/attach-recipe-metadata', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  .then(res => res.json())
-  .catch(err => ({ ok: false, error: err.message }));
-},
-// main.electron.js - TRONG window.desktopApi
-getRecipeContent: (payload) => {
-  console.log('📦 [Renderer] getRecipeContent');
-  return fetch('app://localhost/api/recipe/content', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  .then(res => res.json())
-  .catch(err => ({ ok: false, error: err.message }));
-},
-parseFlashfile: (payload) => {
-  console.log('📦 [Renderer] parseFlashfile');
-  return fetch('app://localhost/api/recipe/parse', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  .then(res => res.json())
-  .catch(err => ({ ok: false, error: err.message }));
-},
-// main.electron.js - TRONG window.desktopApi
-attachLocalRecipeFromModel: (payload) => {
-  console.log('📦 [Renderer] attachLocalRecipeFromModel');
-  return fetch('app://localhost/api/local/attach-recipe', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  .then(res => res.json())
-  .catch(err => ({ ok: false, error: err.message }));
-},
-attachLocalRecipeMetadata: (payload) => {
-  console.log('📦 [Renderer] attachLocalRecipeMetadata');
-  return fetch('app://localhost/api/local/attach-recipe-metadata', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  .then(res => res.json())
-  .catch(err => ({ ok: false, error: err.message }));
-},
         installWindowsQdloaderDriver: () => {
           return fetch('app://localhost/api/driver/qdloader/install', {
             method: 'POST',
@@ -1734,81 +1622,150 @@ attachLocalRecipeMetadata: (payload) => {
           .then(res => res.json())
           .catch(err => ({ ok: false, error: err.message }));
         },
+        attachLocalRecipeFromModel: (payload) => {
+          console.log('📦 [Renderer] attachLocalRecipeFromModel');
+          return fetch('app://localhost/api/local/attach-recipe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          })
+          .then(res => res.json())
+          .catch(err => ({ ok: false, error: err.message }));
+        },
+        attachLocalRecipeMetadata: (payload) => {
+          console.log('📦 [Renderer] attachLocalRecipeMetadata');
+          return fetch('app://localhost/api/local/attach-recipe-metadata', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          })
+          .then(res => res.json())
+          .catch(err => ({ ok: false, error: err.message }));
+        },
+        getRecipeContent: (payload) => {
+          console.log('📦 [Renderer] getRecipeContent');
+          return fetch('app://localhost/api/recipe/content', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          })
+          .then(res => res.json())
+          .catch(err => ({ ok: false, error: err.message }));
+        },
+        parseFlashfile: (payload) => {
+          console.log('📦 [Renderer] parseFlashfile');
+          return fetch('app://localhost/api/recipe/parse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          })
+          .then(res => res.json())
+          .catch(err => ({ ok: false, error: err.message }));
+        },
         rescueLiteFirmware: (payload) => {
-  console.log('🔧 [Renderer] rescueLiteFirmware CALLED!', payload);
-  return fetch('app://localhost/api/rescue/lite/firmware', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload || {})
-  })
-  .then(res => res.json())
-  .then(data => {
-    console.log('✅ [Renderer] rescueLiteFirmware response:', data);
-    return data;
-  })
-  .catch(err => {
-    console.error('❌ [Renderer] rescueLiteFirmware error:', err);
-    return { ok: false, error: err.message };
-  });
-},
-rescueLiteFirmwareFromLocal: (payload) => {
-  console.log('🔧 [Renderer] rescueLiteFirmwareFromLocal CALLED!', payload);
-  return fetch('app://localhost/api/rescue/lite/firmware/local', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload || {})
-  })
-  .then(res => res.json())
-  .then(data => {
-    console.log('✅ [Renderer] rescueLiteFirmwareFromLocal response:', data);
-    return data;
-  })
-  .catch(err => {
-    console.error('❌ [Renderer] rescueLiteFirmwareFromLocal error:', err);
-    return { ok: false, error: err.message };
-  });
-},
-        setupIpcListener: () => {
-          console.log('🔄 [Renderer] Setting up IPC listener...');
-          try {
-            const ipcRenderer = require('electron').ipcRenderer;
-            ipcRenderer.on('read-support:hints-loaded', (event, data) => {
-              console.log('📨 [Renderer] IPC event received:', data);
-              window._readSupportHintsData = data;
-              window.dispatchEvent(new CustomEvent('read-support:hints-loaded-ipc', { detail: data }));
-            });
-            console.log('✅ [Renderer] IPC listener registered for read-support:hints-loaded');
-            return Promise.resolve({ ok: true });
-          } catch (err) {
-            console.error('❌ [Renderer] Failed to setup IPC listener:', err);
-            return Promise.resolve({ ok: false, error: err.message });
-          }
+          console.log('🔧 [Renderer] rescueLiteFirmware CALLED!', payload);
+          return fetch('app://localhost/api/rescue/lite/firmware', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload || {})
+          })
+          .then(res => res.json())
+          .then(data => {
+            console.log('✅ [Renderer] rescueLiteFirmware response:', data);
+            return data;
+          })
+          .catch(err => {
+            console.error('❌ [Renderer] rescueLiteFirmware error:', err);
+            return { ok: false, error: err.message };
+          });
+        },
+        rescueLiteFirmwareFromLocal: (payload) => {
+          console.log('🔧 [Renderer] rescueLiteFirmwareFromLocal CALLED!', payload);
+          return fetch('app://localhost/api/rescue/lite/firmware/local', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload || {})
+          })
+          .then(res => res.json())
+          .then(data => {
+            console.log('✅ [Renderer] rescueLiteFirmwareFromLocal response:', data);
+            if (data.ok && data.data?.commands) {
+              const commands = data.data.commands;
+              window._rescueCommands = commands;
+              window._rescueData = data.data;
+              window.dispatchEvent(new CustomEvent('rescue-commands-loaded', {
+                detail: {
+                  commands: commands,
+                  count: commands.length,
+                  dryRun: data.data.dryRun || false,
+                  flashfilePath: data.data.flashfilePath
+                }
+              }));
+              console.log('📨 Dispatched ' + commands.length + ' commands to Angular');
+            }
+            return data;
+          })
+          .catch(err => {
+            console.error('❌ [Renderer] rescueLiteFirmwareFromLocal error:', err);
+            return { ok: false, error: err.message };
+          });
+        },
+        // Thêm hàm setupIpcListener để lắng nghe các sự kiện từ main process
+setupIpcListener: () => {
+  console.log('🔄 [Renderer] Setting up IPC listener...');
+  try {
+    const ipcRenderer = require('electron').ipcRenderer;
+    
+    // Lắng nghe sự kiện rescue:commands-loaded
+    ipcRenderer.on('rescue:commands-loaded', (event, data) => {
+      console.log('📨 [Renderer] Rescue commands loaded:', data);
+      window._rescueCommands = data.commands;
+      window._rescueData = data;
+      
+      window.dispatchEvent(new CustomEvent('rescue-commands-loaded', {
+        detail: {
+          commands: data.commands,
+          count: data.commands.length,
+          dryRun: data.dryRun || false,
+          flashfilePath: data.flashfilePath
         }
+      }));
+    });
+    
+    // Lắng nghe sự kiện rescue:error
+    ipcRenderer.on('rescue:error', (event, data) => {
+      console.log('❌ [Renderer] Rescue error:', data);
+      window.dispatchEvent(new CustomEvent('rescue-error', {
+        detail: {
+          error: data.error,
+          modelName: data.modelName
+        }
+      }));
+    });
+    
+    console.log('✅ [Renderer] IPC listeners registered');
+    return Promise.resolve({ ok: true });
+  } catch (err) {
+    console.error('❌ [Renderer] Failed to setup IPC listener:', err);
+    return Promise.resolve({ ok: false, error: err.message });
+  }
+}
       };
       
-      // ===== GỌI SETUP IPC LISTENER =====
       window.desktopApi.setupIpcListener();
-      
-      console.log('✅ [Renderer] desktopApi injected with all functions from original project!');
-      console.log('✅ [Renderer] Available functions:', Object.keys(window.desktopApi));
-      
-      window.addEventListener('lookup:result', (event) => {
-        console.log('📨 [Renderer] Received lookup:result event:', event.detail);
-      });
-      
-      window.addEventListener('lookup:error', (event) => {
-        console.log('📨 [Renderer] Received lookup:error event:', event.detail);
-      });
-    `);
+      console.log('✅ [Renderer] desktopApi injected!');
+    `;
+
+    win.webContents.executeJavaScript(desktopApiScript);
   });
 
+  // ===== PROTOCOL HANDLER =====
   protocol.handle('app', async (request) => {
     const url = new URL(request.url);
     let pathname = url.pathname;
     if (pathname === '/' || pathname === '') pathname = '/index.html';
 
     writeLog(`📡 [Protocol] Request: ${request.method} ${pathname}`);
-    writeLog(`📡 [Protocol] Full URL: ${request.url}`);
 
     const corsHeaders = {
       'Content-Type': 'application/json',
@@ -1821,9 +1778,8 @@ rescueLiteFirmwareFromLocal: (payload) => {
       return new Response('', { status: 204, headers: corsHeaders });
     }
 
-    // ===== AUTH =====
+    // ===== AUTH ROUTES =====
     if (pathname.includes('/api/auth/state') && !pathname.includes('complete')) {
-      writeLog(`🔍 [Protocol] Angular kiểm tra state`);
       const hasToken = checkStoredTokenStatus();
       return new Response(JSON.stringify({ 
         ok: true, 
@@ -1833,13 +1789,11 @@ rescueLiteFirmwareFromLocal: (payload) => {
     }
 
     if (pathname.includes('/api/auth/start')) {
-      writeLog(`🔑 [Protocol] Angular gọi /api/auth/start`);
       setTimeout(() => { openAuthPopupWindow(win, getRealLenovoLoginUrl()); }, 0);
       return new Response(JSON.stringify({ ok: true, openedInExternalBrowser: true }), { headers: corsHeaders });
     }
 
     if (pathname.includes('/api/auth/callback')) {
-      writeLog(`🔍 [Protocol] Angular GỌI CALLBACK!`);
       const callbackUrl = pendingCallbackUrl;
       let token = null;
 
@@ -1850,7 +1804,6 @@ rescueLiteFirmwareFromLocal: (payload) => {
           if (token && !token.startsWith('Bearer ')) {
             token = `Bearer ${token}`;
           }
-          writeLog(`🔑 [Protocol] Token từ callback: ${token}`);
           pendingCallbackUrl = null;
         } catch (e) {
           writeLog(`❌ [Protocol] Lỗi parse callback: ${e.message}`);
@@ -1863,13 +1816,11 @@ rescueLiteFirmwareFromLocal: (payload) => {
           if (fs.existsSync(configPath)) {
             const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
             token = configData.authorizationToken;
-            writeLog(`📂 [Protocol] Token từ file config: ${token}`);
           }
         } catch (e) {}
       }
 
       if (!token) {
-        writeLog(`❌ [Protocol] KHÔNG CÓ TOKEN!`);
         return new Response(JSON.stringify({ error: 'No token' }), { 
           status: 400,
           headers: corsHeaders 
@@ -1884,13 +1835,10 @@ rescueLiteFirmwareFromLocal: (payload) => {
         win.webContents.executeJavaScript(`
           localStorage.setItem('auth_token', '${token}');
           localStorage.setItem('authorizationToken', '${token}');
-          console.log('💾 [Renderer] Đã lưu token vào localStorage');
         `);
       }
 
-      return new Response(JSON.stringify({ token: token }), { 
-        headers: corsHeaders 
-      });
+      return new Response(JSON.stringify({ token: token }), { headers: corsHeaders });
     }
 
     if (pathname.includes('/api/auth/complete')) {
@@ -1899,27 +1847,20 @@ rescueLiteFirmwareFromLocal: (payload) => {
 
     // ===== READ SUPPORT HINTS =====
     if (pathname.includes('/api/read-support/hints')) {
-      writeLog(`🔍 [Protocol] getReadSupportHints called`);
-      
       try {
         const body = await request.json();
         const { modelName } = body;
         
         if (!modelName) {
-          return new Response(JSON.stringify({ 
-            params: [], 
-            platform: ''
-          }), { status: 400, headers: corsHeaders });
+          return new Response(JSON.stringify({ params: [], platform: '' }), { status: 400, headers: corsHeaders });
         }
         
         const result = await getReadSupportHints(modelName);
-        
         const responseData = {
           params: result.requiredParameters || [],
           platform: result.platform || ''
         };
         
-        // ===== GỬI EVENT QUA IPC CHO ANGULAR =====
         if (win && !win.isDestroyed()) {
           win.webContents.send('read-support:hints-loaded', {
             modelName: modelName,
@@ -1927,107 +1868,65 @@ rescueLiteFirmwareFromLocal: (payload) => {
             platform: responseData.platform || '',
             hints: responseData.params || []
           });
-          writeLog(`📨 [Protocol] Sent read-support:hints-loaded IPC event to Angular`);
         }
-        
-        writeLog(`📦 [Protocol] Returning: ${JSON.stringify(responseData)}`);
         
         return new Response(JSON.stringify(responseData), { headers: corsHeaders });
       } catch (error) {
-        writeLog(`❌ [Protocol] getReadSupportHints error: ${error.message}`);
-        return new Response(JSON.stringify({ 
-          params: [], 
-          platform: ''
-        }), { status: 500, headers: corsHeaders });
+        return new Response(JSON.stringify({ params: [], platform: '' }), { status: 500, headers: corsHeaders });
       }
     }
 
-    if (pathname.includes('/api/read-support/lookup') && !pathname.includes('/api/read-support/lookup-sn') && !pathname.includes('/api/read-support/lookup-params')) {
-      writeLog(`🔍 [Protocol] lookupReadSupportByImei called`);
-      
+    // ===== LOOKUP ROUTES =====
+    if (pathname.includes('/api/read-support/lookup') && !pathname.includes('lookup-sn') && !pathname.includes('lookup-params')) {
       try {
         const payload = await request.json();
-        writeLog(`📦 [Protocol] Payload: ${JSON.stringify(payload)}`);
-        
         if (!payload.imei) {
           return new Response(JSON.stringify({ 
-            code: 'ERROR', 
-            desc: 'IMEI is required',
-            content: { variants: [], total: 0 }
+            ok: false, error: 'IMEI is required',
+            data: { variants: [], total: 0 }
           }), { status: 400, headers: corsHeaders });
         }
-        
         const result = await lookupReadSupportByImei(payload);
         return new Response(JSON.stringify(result), { headers: corsHeaders });
       } catch (error) {
-        writeLog(`❌ [Protocol] lookupReadSupportByImei error: ${error.message}`);
-        const errorResult = {
-          code: 'ERROR',
-          desc: error.message,
-          content: { variants: [], total: 0 }
-        };
-        return new Response(JSON.stringify(errorResult), { status: 500, headers: corsHeaders });
+        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders });
       }
     }
 
     if (pathname.includes('/api/read-support/lookup-sn')) {
-      writeLog(`🔍 [Protocol] lookupReadSupportBySn called`);
-      
       try {
         const payload = await request.json();
-        writeLog(`📦 [Protocol] Payload: ${JSON.stringify(payload)}`);
-        
         if (!payload.sn) {
           return new Response(JSON.stringify({ 
-            code: 'ERROR', 
-            desc: 'SN is required',
-            content: { variants: [], total: 0 }
+            ok: false, error: 'SN is required',
+            data: { variants: [], total: 0 }
           }), { status: 400, headers: corsHeaders });
         }
-        
         const result = await lookupReadSupportBySn(payload);
         return new Response(JSON.stringify(result), { headers: corsHeaders });
       } catch (error) {
-        writeLog(`❌ [Protocol] lookupReadSupportBySn error: ${error.message}`);
-        return new Response(JSON.stringify({ 
-          code: 'ERROR', 
-          desc: error.message,
-          content: { variants: [], total: 0 }
-        }), { status: 500, headers: corsHeaders });
+        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders });
       }
     }
 
     if (pathname.includes('/api/read-support/lookup-params')) {
-      writeLog(`🔍 [Protocol] lookupReadSupportByParams called`);
-      
       try {
         const payload = await request.json();
-        writeLog(`📦 [Protocol] Payload: ${JSON.stringify(payload)}`);
-        
         if (!payload.model || !payload.params) {
           return new Response(JSON.stringify({ 
-            code: 'ERROR', 
-            desc: 'Model and params are required',
-            content: { variants: [], total: 0 }
+            ok: false, error: 'Model and params are required',
+            data: { variants: [], total: 0 }
           }), { status: 400, headers: corsHeaders });
         }
-        
         const result = await lookupReadSupportByParams(payload);
         return new Response(JSON.stringify(result), { headers: corsHeaders });
       } catch (error) {
-        writeLog(`❌ [Protocol] lookupReadSupportByParams error: ${error.message}`);
-        return new Response(JSON.stringify({ 
-          code: 'ERROR', 
-          desc: error.message,
-          content: { variants: [], total: 0 }
-        }), { status: 500, headers: corsHeaders });
+        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders });
       }
     }
 
-    // ===== DOWNLOAD =====
+    // ===== DOWNLOAD ROUTES =====
     if (pathname.includes('/api/download/firmware')) {
-      writeLog(`📥 [Protocol] Download firmware called`);
-      
       try {
         const body = await request.json();
         let { firmwareData, modelName, downloadId } = body;
@@ -2036,12 +1935,7 @@ rescueLiteFirmwareFromLocal: (payload) => {
           downloadId = `download-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
         }
 
-        writeLog(`📦 [Protocol] Download ID: ${downloadId}`);
-        writeLog(`📦 [Protocol] FirmwareData received: ${JSON.stringify(firmwareData)}`);
-        
         if (firmwareData.romUrl && !firmwareData.romResource) {
-          writeLog(`🔄 [Protocol] Đang chuyển đổi dữ liệu đơn giản sang format đầy đủ...`);
-          
           firmwareData.romResource = {
             uri: firmwareData.romUrl,
             name: firmwareData.romName || 'rom.zip',
@@ -2053,20 +1947,13 @@ rescueLiteFirmwareFromLocal: (payload) => {
             language: firmwareData.language || '',
             publishDate: firmwareData.publishDate || ''
           };
-          
-          if (firmwareData.flashFlowUrl) {
-            firmwareData.flashFlowUrl = firmwareData.flashFlowUrl;
-          }
-          
+          if (firmwareData.flashFlowUrl) firmwareData.flashFlowUrl = firmwareData.flashFlowUrl;
           if (firmwareData.toolUrl) {
             firmwareData.toolResource = {
               uri: firmwareData.toolUrl,
               name: firmwareData.toolName || 'tool.zip'
             };
           }
-          
-          writeLog(`✅ [Protocol] Đã chuyển đổi thành công!`);
-          writeLog(`📦 [Protocol] ROM Resource: ${JSON.stringify(firmwareData.romResource)}`);
         }
         
         const result = await downloadFirmware(firmwareData, { 
@@ -2074,436 +1961,381 @@ rescueLiteFirmwareFromLocal: (payload) => {
           downloadId: downloadId 
         });
         
-        writeLog(`📥 [downloadFirmware] KẾT QUẢ: ${JSON.stringify(result)}`);
-        
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('download:completed', {
-            code: result.allCompleted ? '0000' : 'PARTIAL',
-            desc: result.allCompleted ? 'Download completed successfully' : 'Some files failed to download',
-            content: result
-          });
-        }
-        
         return new Response(JSON.stringify({
           code: result.allCompleted ? '0000' : 'PARTIAL',
           desc: result.allCompleted ? 'Download completed successfully' : 'Some files failed to download',
           content: result
         }), { headers: corsHeaders });
-        
       } catch (error) {
-        writeLog(`❌ [Protocol] Download error: ${error.message}`);
-        writeLog(`❌ [Protocol] Stack: ${error.stack}`);
-        
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('download:error', {
-            error: error.message,
-            modelName: modelName || 'firmware'
-          });
-        }
-        
-        return new Response(JSON.stringify({ 
-          code: 'ERROR', 
-          desc: error.message 
-        }), { status: 500, headers: corsHeaders });
+        return new Response(JSON.stringify({ code: 'ERROR', desc: error.message }), { status: 500, headers: corsHeaders });
       }
     }
 
     if (pathname.includes('/api/download/cancel')) {
-      writeLog(`🛑 [Protocol] Cancel download called`);
-      
       try {
         const body = await request.json();
         let downloadId = body.downloadId;
         
-        writeLog(`📦 [Protocol] Cancel body: ${JSON.stringify(body)}`);
-        writeLog(`📦 [Protocol] downloadId nhận được: ${downloadId}`);
-        
         if (typeof downloadId === 'string' && !downloadId.startsWith('download-')) {
-          const oldId = downloadId;
           downloadId = `download-${downloadId}`;
-          writeLog(`🔄 [Protocol] Thêm prefix: ${oldId} -> ${downloadId}`);
-        }
-        
-        if (typeof downloadId === 'object' && downloadId !== null) {
-          downloadId = downloadId.downloadId || downloadId.id || String(downloadId);
-          if (!downloadId.startsWith('download-')) {
-            downloadId = `download-${downloadId}`;
-          }
         }
         
         downloadId = String(downloadId);
-        writeLog(`🛑 [Protocol] Cancelling download: ${downloadId}`);
-        
-        writeLog(`📦 [Protocol] Active downloads: ${Array.from(activeDownloads.keys()).join(', ')}`);
-        
         const downloadEntry = activeDownloads.get(downloadId);
+        
         if (downloadEntry && typeof downloadEntry.cancel === 'function') {
-          writeLog(`✅ [Protocol] Found download ${downloadId}, cancelling...`);
           downloadEntry.cancel();
           activeDownloads.delete(downloadId);
-          
-          if (win && !win.isDestroyed()) {
-            win.webContents.send('download:cancelled', { 
-              downloadId: downloadId,
-              message: 'Download cancelled by user'
-            });
-          }
-          
-          return new Response(JSON.stringify({ 
-            ok: true,
-            message: 'Download cancelled successfully'
-          }), { headers: corsHeaders });
+          return new Response(JSON.stringify({ ok: true, message: 'Download cancelled' }), { headers: corsHeaders });
         } else {
-          writeLog(`⚠️ [Protocol] Download ${downloadId} not found`);
-          writeLog(`📦 [Protocol] Available IDs: ${Array.from(activeDownloads.keys()).join(', ')}`);
-          return new Response(JSON.stringify({ 
-            ok: false,
-            error: 'Download not found or already completed'
-          }), { status: 404, headers: corsHeaders });
+          return new Response(JSON.stringify({ ok: false, error: 'Download not found' }), { status: 404, headers: corsHeaders });
         }
-        
       } catch (error) {
-        writeLog(`❌ [Protocol] Cancel error: ${error.message}`);
-        return new Response(JSON.stringify({ 
-          ok: false,
-          error: error.message
-        }), { status: 500, headers: corsHeaders });
+        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders });
       }
     }
 
-// ===== RESCUE LITE FIRMWARE =====
-if (pathname.includes('/api/rescue/lite/firmware')) {
+    // ===== RESCUE LITE ROUTES =====
+    if (pathname.includes('/api/rescue/lite/firmware') && !pathname.includes('/local')) {
+      try {
+        const body = await request.json();
+        const result = await rescueLiteFirmware(body);
+        return new Response(JSON.stringify(result), { headers: corsHeaders });
+      } catch (error) {
+        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // ===== RESCUE EXECUTE ROUTE =====
+if (pathname.includes('/api/rescue/execute')) {
   try {
     const body = await request.json();
-    const result = await rescueLiteFirmware(body);
-    return new Response(JSON.stringify(result), { headers: corsHeaders });
+    const { commands, transport, workingDir, dryRun } = body;
+
+    writeLog(`🔧 [Protocol] Executing ${commands?.length || 0} rescue commands`);
+    writeLog(`🔧 [Protocol] Transport: ${transport || 'fastboot'}, DryRun: ${dryRun || false}`);
+
+    // Import hàm execute từ core
+    const { executeRescueCommands, checkRescueTool } = await import('./core/index.js');
+
+    // Kiểm tra tool (chỉ khi không dry run)
+    if (!dryRun) {
+      const toolExists = await checkRescueTool(transport || 'fastboot');
+      if (!toolExists) {
+        writeLog(`❌ [Protocol] Tool ${transport || 'fastboot'} not found`);
+        return new Response(JSON.stringify({
+          ok: false,
+          error: `${transport || 'fastboot'} tool not found. Please install ${transport || 'fastboot'}.`
+        }), { status: 400, headers: corsHeaders });
+      }
+      writeLog(`✅ [Protocol] Tool ${transport || 'fastboot'} found`);
+    }
+
+    // Thực thi commands với progress callback
+    const result = await executeRescueCommands(commands, {
+      transport: transport || 'fastboot',
+      workingDir: workingDir || process.cwd(),
+      dryRun: dryRun || false,
+      stopOnError: true,
+      onProgress: (command, index, total) => {
+        // Gửi progress qua IPC
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('rescue:execution-progress', {
+            command,
+            index,
+            total,
+            percent: Math.round((index / total) * 100)
+          });
+        }
+      }
+    });
+
+    writeLog(`✅ [Protocol] Execution completed: ${result.succeeded} succeeded, ${result.failed} failed`);
+
+    return new Response(JSON.stringify({
+      ok: true,
+      data: result
+    }), { headers: corsHeaders });
+
   } catch (error) {
-    return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders });
+    writeLog(`❌ [Protocol] Execute rescue error: ${error.message}`);
+    return new Response(JSON.stringify({
+      ok: false,
+      error: error.message
+    }), { status: 500, headers: corsHeaders });
   }
 }
 
+// ===== RESCUE CHECK TOOL ROUTE =====
+if (pathname.includes('/api/rescue/check-tool')) {
+  try {
+    const body = await request.json();
+    const { transport } = body;
+    const { checkRescueTool } = await import('./core/index.js');
+    const exists = await checkRescueTool(transport || 'fastboot');
+    
+    return new Response(JSON.stringify({
+      ok: true,
+      exists,
+      transport: transport || 'fastboot'
+    }), { headers: corsHeaders });
+  } catch (error) {
+    return new Response(JSON.stringify({
+      ok: false,
+      exists: false,
+      error: error.message
+    }), { status: 500, headers: corsHeaders });
+  }
+}
+
+// Trong route /api/rescue/lite/firmware/local - SỬA LẠI
 if (pathname.includes('/api/rescue/lite/firmware/local')) {
   try {
     const body = await request.json();
+    writeLog(`🔧 [Protocol] rescueLiteFirmwareFromLocal called with body: ${JSON.stringify(body)}`);
+    
     const result = await rescueLiteFirmwareFromLocal(body);
+    writeLog(`📦 [Protocol] Result from rescueLiteFirmwareFromLocal: ${JSON.stringify(result)}`);
+    
+    // ===== GỬI EVENT QUA IPC CHO ANGULAR =====
+    if (win && !win.isDestroyed()) {
+      if (result.ok && result.data?.commands) {
+        // Gửi dữ liệu commands qua IPC
+        const commandsData = {
+          commands: result.data.commands,
+          count: result.data.commands.length,
+          dryRun: result.data.dryRun || false,
+          flashfilePath: result.data.flashfilePath,
+          extractPath: result.data.extractPath,
+          modelName: body.modelName || 'Unknown',
+          status: result.data.status || 'success',
+          message: result.data.message || `Found ${result.data.commands.length} flash commands`
+        };
+        
+        // Gửi qua IPC
+        win.webContents.send('rescue:commands-loaded', commandsData);
+        writeLog(`📨 [Protocol] Sent rescue:commands-loaded IPC event with ${result.data.commands.length} commands`);
+        
+        // Gửi qua executeJavaScript trực tiếp để đảm bảo Angular nhận được
+        const commandsJson = JSON.stringify(commandsData);
+        win.webContents.executeJavaScript(`
+          (function() {
+            console.log('📨 [Direct] Rescue commands data:', ${commandsJson});
+            
+            // Dispatch event cho Angular
+            window.dispatchEvent(new CustomEvent('rescue-commands-loaded', {
+              detail: ${commandsJson}
+            }));
+            
+            // Lưu vào window để Angular có thể lấy
+            window._rescueCommandsData = ${commandsJson};
+            window._rescueCommands = ${JSON.stringify(result.data.commands)};
+            
+            // Gọi trực tiếp hàm của Angular nếu có
+            if (window.angularRescueCallback) {
+              console.log('📨 [Direct] Calling angularRescueCallback');
+              window.angularRescueCallback(${commandsJson});
+            }
+            
+            console.log('✅ [Direct] Rescue data dispatched to Angular');
+          })();
+        `);
+      } else {
+        const errorData = {
+          error: result.error || 'Unknown error',
+          modelName: body.modelName || 'Unknown'
+        };
+        win.webContents.send('rescue:error', errorData);
+        writeLog(`📨 [Protocol] Sent rescue:error IPC event: ${result.error}`);
+      }
+    }
+    
     return new Response(JSON.stringify(result), { headers: corsHeaders });
   } catch (error) {
+    writeLog(`❌ [Protocol] rescueLiteFirmwareFromLocal error: ${error.message}`);
     return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders });
   }
 }
 
-// ===== ATTACH RECIPE =====
-if (pathname.includes('/api/local/attach-recipe')) {
-  try {
-    const body = await request.json();
-    const result = await attachLocalRecipeFromModel(body);
-    return new Response(JSON.stringify(result), { headers: corsHeaders });
-  } catch (error) {
-    return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders });
-  }
-}
+    // ===== ATTACH RECIPE ROUTES =====
+    if (pathname.includes('/api/local/attach-recipe')) {
+      try {
+        const body = await request.json();
+        const result = await attachLocalRecipeFromModel(body);
+        return new Response(JSON.stringify(result), { headers: corsHeaders });
+      } catch (error) {
+        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders });
+      }
+    }
 
-if (pathname.includes('/api/local/attach-recipe-metadata')) {
-  try {
-    const body = await request.json();
-    const result = await attachLocalRecipeMetadata(body);
-    return new Response(JSON.stringify(result), { headers: corsHeaders });
-  } catch (error) {
-    return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders });
-  }
-}
+    if (pathname.includes('/api/local/attach-recipe-metadata')) {
+      try {
+        const body = await request.json();
+        const result = await attachLocalRecipeMetadata(body);
+        return new Response(JSON.stringify(result), { headers: corsHeaders });
+      } catch (error) {
+        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders });
+      }
+    }
 
-// ===== GET RECIPE CONTENT =====
-if (pathname.includes('/api/recipe/content')) {
-  try {
-    const body = await request.json();
-    const result = await getRecipeContent(body);
-    return new Response(JSON.stringify(result), { headers: corsHeaders });
-  } catch (error) {
-    return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders });
-  }
-}
+    // ===== RECIPE CONTENT AND PARSE =====
+    if (pathname.includes('/api/recipe/content')) {
+      try {
+        const body = await request.json();
+        const result = await getRecipeContent(body);
+        return new Response(JSON.stringify(result), { headers: corsHeaders });
+      } catch (error) {
+        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders });
+      }
+    }
 
-// ===== PARSE FLASHFILE =====
-if (pathname.includes('/api/recipe/parse')) {
-  try {
-    const body = await request.json();
-    const result = await parseFlashfile(body);
-    return new Response(JSON.stringify(result), { headers: corsHeaders });
-  } catch (error) {
-    return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders });
-  }
-}
+    if (pathname.includes('/api/recipe/parse')) {
+      try {
+        const body = await request.json();
+        const result = await parseFlashfile(body);
+        return new Response(JSON.stringify(result), { headers: corsHeaders });
+      } catch (error) {
+        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // ===== CATALOG ROUTES =====
+    if (pathname.includes('/api/catalog/models')) {
+      try {
+        let body = null;
+        try { body = await request.json(); } catch (e) {}
+        const refresh = body?.refresh || false;
+        const result = await getModelNames(refresh);
+        return new Response(JSON.stringify(result), { headers: corsHeaders });
+      } catch (error) {
+        return new Response(JSON.stringify({ code: 'ERROR', desc: error.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // ===== PLAY STORE ROUTES =====
+    if (pathname.includes('/api/playstore/status')) {
+      try { const result = await getPlayStoreStatus(); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, available: false, error: error.message }), { status: 500, headers: corsHeaders }); }
+    }
+
+    if (pathname.includes('/api/playstore/downloads')) {
+      try { const result = await listPlayStoreDownloads(); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, error: error.message, downloads: [] }), { status: 500, headers: corsHeaders }); }
+    }
+
+    if (pathname.includes('/api/playstore/search')) {
+      try { const body = await request.json(); const result = await searchPlayStoreApps(body); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, error: error.message, results: [] }), { status: 500, headers: corsHeaders }); }
+    }
+
+    if (pathname.includes('/api/playstore/details')) {
+      try { const body = await request.json(); const result = await getPlayStoreAppDetails(body); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); }
+    }
+
+    if (pathname.includes('/api/playstore/download')) {
+      try { const body = await request.json(); const result = await downloadPlayStoreApp(body); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); }
+    }
+
+    if (pathname.includes('/api/playstore/delete')) {
+      try { const body = await request.json(); const result = await deletePlayStoreDownload(body); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); }
+    }
+
+    if (pathname.includes('/api/playstore/install')) {
+      try { const body = await request.json(); const result = await installPlayStoreApp(body); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); }
+    }
+
+    // ===== BACKUP ROUTES =====
+    if (pathname.includes('/api/backup/snapshots')) {
+      try { const result = await listBackupRestoreSnapshots(); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, error: error.message, snapshots: [] }), { status: 500, headers: corsHeaders }); }
+    }
+
+    if (pathname.includes('/api/backup/scan')) {
+      try { const result = await scanConnectedBackupPreview(); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, connected: false, error: error.message }), { status: 500, headers: corsHeaders }); }
+    }
+
+    if (pathname.includes('/api/backup/progress')) {
+      try { const result = await getConnectedBackupPreviewProgress(); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); }
+    }
+
+    if (pathname.includes('/api/backup/cancel')) {
+      try { const result = await cancelConnectedBackupProcess(); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); }
+    }
+
+    if (pathname.includes('/api/backup/device')) {
+      try { const body = await request.json(); const result = await backupConnectedDevice(body); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, connected: false, error: error.message }), { status: 500, headers: corsHeaders }); }
+    }
+
+    if (pathname.includes('/api/backup/restore')) {
+      try { const body = await request.json(); const result = await restoreBackupSnapshot(body); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, connected: false, error: error.message }), { status: 500, headers: corsHeaders }); }
+    }
+
+    if (pathname.includes('/api/backup/delete')) {
+      try { const body = await request.json(); const result = await deleteBackupSnapshot(body); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); }
+    }
+
+    // ===== LOCAL FILES ROUTES =====
+    if (pathname.includes('/api/local/files')) {
+      try { const result = await listLocalDownloadedFiles(); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, error: error.message, files: [] }), { status: 500, headers: corsHeaders }); }
+    }
+
+    if (pathname.includes('/api/local/extract')) {
+      try { const body = await request.json(); const result = await extractLocalFirmware(body); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); }
+    }
+
+    if (pathname.includes('/api/local/delete')) {
+      try { const body = await request.json(); const result = await deleteLocalFile(body); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); }
+    }
+
+    // ===== DRIVER ROUTES =====
+    if (pathname.includes('/api/driver/qdloader/status')) {
+      try { const result = await getWindowsQdloaderDriverStatus(); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, installed: false, error: error.message }), { status: 500, headers: corsHeaders }); }
+    }
+
+    if (pathname.includes('/api/driver/qdloader/install')) {
+      try { const result = await installWindowsQdloaderDriver(); return new Response(JSON.stringify(result), { headers: corsHeaders }); } 
+      catch (error) { return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); }
+    }
 
     // ===== OPEN FOLDER =====
     if (pathname.includes('/api/open-folder')) {
-      writeLog(`📂 [Protocol] Open folder called`);
-      
       try {
         const body = await request.json();
         const { path: folderPath } = body;
-        
         if (!folderPath) {
-          return new Response(JSON.stringify({ 
-            ok: false, 
-            error: 'Path is required' 
-          }), { status: 400, headers: corsHeaders });
+          return new Response(JSON.stringify({ ok: false, error: 'Path is required' }), { status: 400, headers: corsHeaders });
         }
-        
         if (fs.existsSync(folderPath)) {
           shell.showItemInFolder(folderPath);
           return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
         } else {
-          return new Response(JSON.stringify({ 
-            ok: false, 
-            error: 'Folder does not exist' 
-          }), { status: 404, headers: corsHeaders });
+          return new Response(JSON.stringify({ ok: false, error: 'Folder does not exist' }), { status: 404, headers: corsHeaders });
         }
-        
       } catch (error) {
-        writeLog(`❌ [Protocol] Open folder error: ${error.message}`);
-        return new Response(JSON.stringify({ 
-          ok: false, 
-          error: error.message 
-        }), { status: 500, headers: corsHeaders });
-      }
-    }
-
-    // ===== CATALOG =====
-    if (pathname.includes('/api/catalog/models')) {
-      writeLog(`🔍 [Protocol] Angular gọi /api/catalog/models`);
-      
-      try {
-        let body = null;
-        try {
-          body = await request.json();
-        } catch (e) {}
-        
-        writeLog(`📦 [Protocol] Body: ${JSON.stringify(body)}`);
-        
-        const refresh = body?.refresh || false;
-        const result = await getModelNames(refresh);
-        
-        if (result.code === '0000' && result.content && Array.isArray(result.content) && win && !win.isDestroyed()) {
-          const modelsData = JSON.stringify(result.content);
-          const count = result.content.length;
-          win.webContents.executeJavaScript(`
-            try {
-              const models = ${modelsData};
-              if (models && models.length > 0) {
-                localStorage.setItem('catalog_models', JSON.stringify(models));
-                localStorage.setItem('catalog_count', '${count}');
-                console.log('💾 [Renderer] Đã lưu ${count} models vào localStorage');
-              }
-            } catch(e) {
-              console.error('❌ [Renderer] Lỗi lưu catalog:', e);
-            }
-          `);
-        }
-        
-        return new Response(JSON.stringify(result), { headers: corsHeaders });
-      } catch (error) {
-        writeLog(`❌ [Protocol] Catalog error: ${error.message}`);
-        return new Response(JSON.stringify({ 
-          code: 'ERROR', 
-          desc: error.message 
-        }), { status: 500, headers: corsHeaders });
-      }
-    }
-
-    // ===== PLAY STORE =====
-    if (pathname.includes('/api/playstore/status')) {
-      try { 
-        const result = await getPlayStoreStatus();
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, available: false, error: error.message }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    if (pathname.includes('/api/playstore/downloads')) {
-      try { 
-        const result = await listPlayStoreDownloads();
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, error: error.message, downloads: [] }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    if (pathname.includes('/api/playstore/search')) {
-      try { 
-        const body = await request.json(); 
-        const result = await searchPlayStoreApps(body);
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, error: error.message, results: [] }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    if (pathname.includes('/api/playstore/details')) {
-      try { 
-        const body = await request.json(); 
-        const result = await getPlayStoreAppDetails(body);
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    if (pathname.includes('/api/playstore/download')) {
-      try { 
-        const body = await request.json(); 
-        const result = await downloadPlayStoreApp(body);
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    if (pathname.includes('/api/playstore/delete')) {
-      try { 
-        const body = await request.json(); 
-        const result = await deletePlayStoreDownload(body);
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    if (pathname.includes('/api/playstore/install')) {
-      try { 
-        const body = await request.json(); 
-        const result = await installPlayStoreApp(body);
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    // ===== BACKUP =====
-    if (pathname.includes('/api/backup/snapshots')) {
-      try { 
-        const result = await listBackupRestoreSnapshots();
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, error: error.message, snapshots: [] }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    if (pathname.includes('/api/backup/scan')) {
-      try { 
-        const result = await scanConnectedBackupPreview();
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, connected: false, error: error.message }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    if (pathname.includes('/api/backup/progress')) {
-      try { 
-        const result = await getConnectedBackupPreviewProgress();
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    if (pathname.includes('/api/backup/cancel')) {
-      try { 
-        const result = await cancelConnectedBackupProcess();
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    if (pathname.includes('/api/backup/device')) {
-      try { 
-        const body = await request.json(); 
-        const result = await backupConnectedDevice(body);
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, connected: false, error: error.message }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    if (pathname.includes('/api/backup/restore')) {
-      try { 
-        const body = await request.json(); 
-        const result = await restoreBackupSnapshot(body);
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, connected: false, error: error.message }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    if (pathname.includes('/api/backup/delete')) {
-      try { 
-        const body = await request.json(); 
-        const result = await deleteBackupSnapshot(body);
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    // ===== LOCAL FILES =====
-    if (pathname.includes('/api/local/files')) {
-      try { 
-        const result = await listLocalDownloadedFiles();
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, error: error.message, files: [] }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    if (pathname.includes('/api/local/extract')) {
-      try { 
-        const body = await request.json(); 
-        const result = await extractLocalFirmware(body);
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    if (pathname.includes('/api/local/delete')) {
-      try { 
-        const body = await request.json(); 
-        const result = await deleteLocalFile(body);
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    // ===== DRIVERS =====
-    if (pathname.includes('/api/driver/qdloader/status')) {
-      try { 
-        const result = await getWindowsQdloaderDriverStatus();
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, installed: false, error: error.message }), { status: 500, headers: corsHeaders }); 
-      }
-    }
-
-    if (pathname.includes('/api/driver/qdloader/install')) {
-      try { 
-        const result = await installWindowsQdloaderDriver();
-        return new Response(JSON.stringify(result), { headers: corsHeaders }); 
-      } catch (error) { 
-        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders }); 
+        return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: corsHeaders });
       }
     }
 
     // ===== STATIC FILES =====
-    if (pathname.includes('/models-catalog.json')) {
-      writeLog(`📂 [Protocol] Phục vụ file models-catalog.json`);
+    if (pathname.includes('models-catalog.json')) {
       try {
         const modelsPath = path.join(process.cwd(), 'assets/data/models-catalog.json');
         if (fs.existsSync(modelsPath)) {
           const content = fs.readFileSync(modelsPath, 'utf8');
-          writeLog(`✅ [Protocol] Đã đọc file models-catalog.json (${content.length} bytes)`);
           return new Response(content, {
             headers: {
               'Content-Type': 'application/json',
@@ -2511,16 +2343,16 @@ if (pathname.includes('/api/recipe/parse')) {
             }
           });
         }
-      } catch (e) {
-        writeLog(`❌ [Protocol] Lỗi đọc models-catalog.json: ${e.message}`);
-      }
+      } catch (e) {}
     }
 
     if (pathname.includes('config.json')) {
       try {
-        const activeConfigPath = path.join(process.cwd(), 'assets/data/config.json');
-        if (fs.existsSync(activeConfigPath)) {
-          return new Response(fs.readFileSync(activeConfigPath), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+        const configPath = path.join(process.cwd(), 'assets/data/config.json');
+        if (fs.existsSync(configPath)) {
+          return new Response(fs.readFileSync(configPath), { 
+            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } 
+          });
         }
       } catch (e) {}
     }
@@ -2543,6 +2375,7 @@ if (pathname.includes('/api/recipe/parse')) {
   win.loadFile(indexPath);
 }
 
+// ===== APP EVENTS =====
 app.on('open-url', (event, url) => {
   event.preventDefault();
   writeLog('🚀 [macOS] Hệ điều hành chuyển giao link hồi hướng về app: ' + url);
@@ -2556,12 +2389,10 @@ app.whenReady().then(() => {
 
 app.on('before-quit', (event) => {
   writeLog('🛑 [App] Đang đóng app, cleanup...');
-  
   if (progressInterval) {
     clearInterval(progressInterval);
     progressInterval = null;
   }
-  
   if (win && !win.isDestroyed()) {
     win.close();
   }
